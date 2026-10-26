@@ -163,8 +163,8 @@ function Index() {
               Know where your margin{" "}
               <span className="relative inline-block text-ember">
                 really
-                <svg viewBox="0 0 200 12" preserveAspectRatio="none" className="absolute -bottom-1 left-0 h-2.5 w-full" aria-hidden>
-                  <path d="M2 8 C 25 2, 45 12, 70 6 S 120 2, 140 7 S 180 10, 198 4" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
+                <svg viewBox="0 0 200 14" preserveAspectRatio="none" className="pointer-events-none absolute -left-[2%] -bottom-[0.14em] h-[0.2em] w-[104%]" aria-hidden>
+                  <path d="M3 10 C 50 4, 120 3, 197 6" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
                 </svg>
               </span>{" "}
               goes.
