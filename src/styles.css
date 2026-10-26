@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-display: "Instrument Sans", system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
   --font-sans: "Instrument Sans", system-ui, sans-serif;
   --color-ink: var(--ink);
   --color-plum: var(--plum);
@@ -69,7 +69,7 @@
   * { border-color: var(--color-border); }
   html { scroll-behavior: smooth; }
   body { background-color: var(--color-background); color: var(--color-foreground); font-family: var(--font-sans); }
-  h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.03em; }
+  h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.02em; font-variation-settings: "SOFT" 100, "opsz" 96; }
   section[id] { scroll-margin-top: 5rem; }
 }
 
@@ -88,4 +88,11 @@
   background-image: url("/photos/butter-gradient.jpg");
   background-size: cover;
   background-position: center;
+}
+
+@utility wordmark {
+  font-family: var(--font-display);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  font-variation-settings: "SOFT" 100, "opsz" 144;
 }

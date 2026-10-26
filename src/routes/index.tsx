@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { z } from "zod";
-import { Mail, CheckCircle2, Menu, X } from "lucide-react";
+import { Mail, CheckCircle2, Menu, X, ArrowUpRight } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -28,16 +28,13 @@ const btnPrimary = "inline-flex items-center justify-center rounded-full bg-prim
 const btnOutline = "inline-flex items-center justify-center rounded-full border border-primary/30 px-6 py-3 text-sm font-semibold text-primary transition hover:bg-primary/5";
 const label = "text-xs font-semibold uppercase tracking-[0.14em] text-plum";
 
-function Wordmark() {
-  return (
-    <a href="#top" className="text-xl font-semibold leading-none tracking-tight text-foreground">
-      truffle<span className="ml-1.5 font-normal text-muted-foreground">metrics</span>
-    </a>
-  );
-}
-
 function Reveal({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <div className={`reveal ${className}`}>{children}</div>;
+}
+
+/** Bento tile: rounded, soft, one idea each. */
+function Tile({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <div className={`reveal relative overflow-hidden rounded-[2rem] ${className}`}>{children}</div>;
 }
 
 /** Muted line-drawing clip: plays once when it scrolls into view and holds the last frame. */
@@ -73,8 +70,40 @@ function Clip({ name, alt, className = "" }: { name: string; alt: string; classN
   );
 }
 
-function Photo({ name, alt, className = "" }: { name: string; alt: string; className?: string }) {
-  return <img src={`/photos/${name}.jpg`} alt={alt} loading="lazy" className={`h-full w-full object-cover ${className}`} />;
+function Photo({ name, alt, className = "", eager = false }: { name: string; alt: string; className?: string; eager?: boolean }) {
+  return (
+    <img
+      src={`/photos/${name}.jpg`}
+      alt={alt}
+      loading={eager ? "eager" : "lazy"}
+      fetchPriority={eager ? "high" : "auto"}
+      decoding="async"
+      className={`h-full w-full object-cover ${className}`}
+    />
+  );
+}
+
+/** The truffle dot from the brand sheet: an ember ball with cracked veins. */
+function TruffleDot({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden>
+      <defs><clipPath id="td"><circle cx="50" cy="50" r="48" /></clipPath></defs>
+      <circle cx="50" cy="50" r="48" fill="var(--ember)" />
+      <g clipPath="url(#td)" stroke="var(--paper)" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
+        <path d="M4 36 L30 30 L46 8 M30 30 L38 54 L14 70 M38 54 L66 46 L96 22 M66 46 L74 76 L52 98 M14 70 L22 98 M74 76 L98 80 M46 8 L68 4" />
+      </g>
+    </svg>
+  );
+}
+
+function Wordmark({ light = false }: { light?: boolean }) {
+  return (
+    <a href="#top" className="inline-flex items-baseline gap-1.5 leading-none" aria-label="truffle metrics">
+      <span className="wordmark text-[1.7rem]">truffle</span>
+      <TruffleDot className="-mx-0.5 h-[0.65rem] w-[0.65rem] self-end" />
+      <span className={`text-sm font-medium ${light ? "opacity-70" : "text-muted-foreground"}`}>metrics</span>
+    </a>
+  );
 }
 
 function Index() {
@@ -89,16 +118,18 @@ function Index() {
     return () => io.disconnect();
   }, []);
 
+  const scrim = "absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/85 via-ink/45 to-transparent p-6 pt-20 text-paper";
+
   return (
     <div id="top" className="min-h-screen">
       <header className="sticky top-0 z-50 border-b border-border/60 bg-background/85 backdrop-blur">
-        <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
+        <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3">
           <Wordmark />
           <div className="hidden items-center gap-8 md:flex">
             {links.map((l) => (
               <a key={l.href} href={l.href} className="text-sm text-muted-foreground transition hover:text-foreground">{l.label}</a>
             ))}
-            <a href="#contact" className={btnPrimary + " py-2"}>Get in touch</a>
+            <a href="#contact" className={btnPrimary + " py-2"}>Say hello</a>
           </div>
           <button className="md:hidden" aria-label="Toggle menu" onClick={() => setOpen(!open)}>
             {open ? <X /> : <Menu />}
@@ -109,148 +140,141 @@ function Index() {
             {links.map((l) => (
               <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="text-foreground">{l.label}</a>
             ))}
-            <a href="#contact" onClick={() => setOpen(false)} className={btnPrimary}>Get in touch</a>
+            <a href="#contact" onClick={() => setOpen(false)} className={btnPrimary}>Say hello</a>
           </div>
         )}
       </header>
 
-      <main>
+      <main className="mx-auto max-w-6xl space-y-4 px-4 py-4 sm:px-5 sm:py-5 md:space-y-5">
         {/* Hero */}
-        <section className="mx-auto grid max-w-6xl items-center gap-12 px-5 py-16 md:grid-cols-[1.1fr_1fr] md:py-24">
-          <Reveal>
+        <section className="grid gap-4 md:grid-cols-12 md:gap-5">
+          <Tile className="bg-card p-8 sm:p-12 md:col-span-7 md:row-span-2">
             <p className={label}>Invoices, checked for you</p>
-            <h1 className="mt-5 text-5xl font-semibold leading-[1.02] text-foreground sm:text-6xl lg:text-7xl">
+            <h1 className="mt-5 text-5xl font-semibold leading-[1] text-foreground sm:text-6xl lg:text-7xl">
               Know where your margin <span className="text-ember">really</span> goes.
             </h1>
             <p className="mt-6 max-w-lg text-lg text-muted-foreground">
-              Truffle Metrics turns your scattered invoices and sales data into clear insights, and practical advice you can act on this week.
+              Hand us your supplier invoices. You get back a short message with what to check and what it is worth. No login, no dashboard.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <a href="#contact" className={btnPrimary}>Talk to us</a>
               <a href="#how" className={btnOutline}>See how it works</a>
             </div>
-          </Reveal>
-          <Reveal>
-            <div className="relative">
-              <div className="aspect-[4/5] overflow-hidden rounded-3xl shadow-card sm:aspect-[3/2] md:aspect-[4/5]">
-                <Photo name="chef" alt="A chef plating food in a busy restaurant kitchen" className="object-[40%_50%]" />
-              </div>
-              <div className="absolute -bottom-5 left-4 right-4 rounded-2xl border border-border bg-card p-4 shadow-card sm:left-auto sm:right-6 sm:w-72">
-                <p className={label}>Example alert</p>
-                <p className="mt-2 text-sm font-medium">One price line moved. Check it before you pay.</p>
-                <span className="mt-3 block h-1.5 w-2/3 rounded-full bg-ember" />
-              </div>
+          </Tile>
+          <Tile className="min-h-[22rem] md:col-span-5 md:row-span-3 md:min-h-0">
+            <Photo eager name="chef" alt="A chef plating food in a busy restaurant kitchen" className="absolute inset-0 object-[40%_50%]" />
+            <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-border bg-card/95 p-4 shadow-card backdrop-blur sm:inset-x-6 sm:bottom-6">
+              <p className={label}>Example message</p>
+              <p className="mt-2 text-sm font-medium">One price line moved this month. Worth a call before you pay.</p>
+              <span className="mt-3 block h-1.5 w-2/3 rounded-full bg-ember" />
             </div>
-          </Reveal>
+          </Tile>
+          <Tile className="grain flex flex-col justify-between gap-6 p-8 md:col-span-4">
+            <p className={label}>The idea</p>
+            <p className="text-3xl font-semibold leading-tight">We check. You get the message.</p>
+          </Tile>
+          <Tile className="flex items-center justify-between gap-4 bg-primary p-8 text-primary-foreground md:col-span-3">
+            <p className="text-lg font-medium leading-snug">Built for newer independent restaurants.</p>
+            <TruffleDot className="h-14 w-14 shrink-0" />
+          </Tile>
         </section>
 
         {/* Problem */}
-        <section id="problem" className="mx-auto max-w-6xl px-5 py-20">
-          <Reveal>
+        <section id="problem" className="grid gap-4 md:grid-cols-12 md:gap-5">
+          <Tile className="bg-card p-8 sm:p-12 md:col-span-5">
             <p className={label}>The problem</p>
-            <h2 className="mt-4 max-w-2xl text-3xl font-semibold sm:text-5xl">Running a restaurant is hard enough without the spreadsheet chaos.</h2>
-          </Reveal>
-          <div className="mt-12 grid gap-6 md:grid-cols-3">
-            {[
-              { img: "paper-stack", alt: "A tall stack of paper invoices", t: "Invoices everywhere", d: "Dozens of suppliers, different formats, paper and PDF. Nobody has the full picture." },
-              { img: "counter-pay", alt: "A guest paying at a restaurant bar", t: "Sales split across systems", d: "POS, delivery apps, events and bar sales all report differently, so comparing them takes hours." },
-              { img: "crates", alt: "Stacked drinks crates in a storeroom", t: "Margins you can't see", d: "Prices change, portions drift and waste adds up. By the time you notice, the month is over." },
-            ].map(({ img, alt, t, d }) => (
-              <Reveal key={t}>
-                <div className="aspect-[4/3] overflow-hidden rounded-2xl"><Photo name={img} alt={alt} /></div>
-                <h3 className="mt-5 text-xl font-semibold">{t}</h3>
-                <p className="mt-2 text-muted-foreground">{d}</p>
-              </Reveal>
-            ))}
-          </div>
+            <h2 className="mt-4 text-3xl font-semibold sm:text-4xl">Running a restaurant is hard enough without the spreadsheet chaos.</h2>
+          </Tile>
+          {[
+            { img: "paper-stack", alt: "A tall stack of paper invoices", t: "Invoices everywhere", d: "Dozens of suppliers, paper and PDF. Nobody has the full picture.", c: "md:col-span-7" },
+            { img: "counter-pay", alt: "A guest paying at a restaurant bar", t: "Sales split across systems", d: "POS, delivery apps and bar sales all report differently.", c: "md:col-span-6" },
+            { img: "crates", alt: "Stacked drinks crates in a storeroom", t: "Margins you can't see", d: "Prices drift and waste adds up. By the time you notice, the month is over.", c: "md:col-span-6" },
+          ].map(({ img, alt, t, d, c }) => (
+            <Tile key={t} className={`min-h-[18rem] md:min-h-[20rem] ${c}`}>
+              <Photo name={img} alt={alt} className="absolute inset-0" />
+              <div className={scrim}>
+                <h3 className="text-2xl font-semibold">{t}</h3>
+                <p className="mt-1 max-w-md text-sm text-paper/85">{d}</p>
+              </div>
+            </Tile>
+          ))}
         </section>
 
         {/* Solution */}
-        <section id="solution" className="grain py-20 text-foreground">
-          <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 md:grid-cols-2">
-            <Reveal>
-              <p className={label}>Our solution</p>
-              <h2 className="mt-4 text-3xl font-semibold sm:text-5xl">We check. You get the message.</h2>
-              <p className="mt-4 max-w-xl text-foreground/75">We bring your invoices and POS data together, structure them, and tell you what is actually driving your profit.</p>
-              <ol className="mt-10 space-y-6">
-                {[
-                  { t: "Structured data", d: "We clean and organize invoices and sales into one consistent dataset." },
-                  { t: "Insights that matter", d: "Cost trends, margin per category, supplier price changes and outliers." },
-                  { t: "Advice you can act on", d: "A short message in plain language, with clear next steps for your venue." },
-                ].map(({ t, d }, i) => (
-                  <li key={t} className="flex gap-5">
-                    <span className="text-2xl font-semibold text-plum">0{i + 1}</span>
-                    <div>
-                      <h3 className="text-xl font-semibold">{t}</h3>
-                      <p className="mt-1 text-foreground/75">{d}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </Reveal>
-            <Reveal><Clip name="price-alert" alt="A supplier price list is checked and a price rise becomes an alert" /></Reveal>
-          </div>
+        <section id="solution" className="grid gap-4 md:grid-cols-12 md:gap-5">
+          <Tile className="grain p-8 sm:p-12 md:col-span-7">
+            <p className={label}>Our solution</p>
+            <h2 className="mt-4 text-3xl font-semibold sm:text-5xl">One clear view of costs, sales and margins.</h2>
+            <ol className="mt-8 space-y-5">
+              {[
+                { t: "Structured data", d: "Invoices and sales cleaned into one consistent set." },
+                { t: "Insights that matter", d: "Cost trends, supplier price changes and outliers." },
+                { t: "Advice you can act on", d: "Plain language, with next steps for your venue." },
+              ].map(({ t, d }, i) => (
+                <li key={t} className="flex gap-4">
+                  <span className="wordmark text-2xl text-plum">{i + 1}</span>
+                  <p><span className="font-semibold">{t}.</span> <span className="text-foreground/75">{d}</span></p>
+                </li>
+              ))}
+            </ol>
+          </Tile>
+          <Tile className="bg-card p-4 md:col-span-5">
+            <Clip name="price-alert" alt="A supplier price list is checked and a price rise becomes an alert" className="border-0" />
+          </Tile>
         </section>
 
         {/* How */}
-        <section id="how" className="mx-auto max-w-6xl px-5 py-20">
-          <Reveal>
-            <p className={label}>How it works</p>
-            <h2 className="mt-4 text-3xl font-semibold sm:text-5xl">Simple to start, useful from week one.</h2>
-          </Reveal>
-          <div className="mt-12 grid gap-8 md:grid-cols-3">
-            {[
-              { clip: "three-sources", alt: "Invoices and sales data flow into one place", n: "01", t: "Share your invoices and POS exports", d: "Forward invoices as they arrive. Sales exports are a bonus where you have them." },
-              { clip: "messy-to-clear", alt: "A messy pile of documents becomes a clear table", n: "02", t: "We structure and check every line", d: "Locally, privacy first. You get an easy-to-read overview of costs and margins." },
-              { clip: "email-brief", alt: "A short brief arrives in an inbox", n: "03", t: "You get a short list of actions", d: "By email, in plain language. Then we walk you through the recommendations." },
-            ].map(({ clip, alt, n, t, d }) => (
-              <Reveal key={n}>
-                <Clip name={clip} alt={alt} />
-                <p className="mt-5 text-sm font-semibold text-plum">{n}</p>
+        <section id="how" className="grid gap-4 md:grid-cols-12 md:gap-5">
+          <Tile className="flex flex-col justify-end bg-primary p-8 text-primary-foreground sm:p-12 md:col-span-12">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-butter">How it works</p>
+            <h2 className="mt-4 max-w-2xl text-3xl font-semibold sm:text-5xl">Simple to start, useful from week one.</h2>
+          </Tile>
+          {[
+            { clip: "three-sources", alt: "Invoices and sales data flow into one place", n: "1", t: "Share your invoices", d: "Forward them as they arrive. Sales exports are a bonus.", bg: "bg-card" },
+            { clip: "messy-to-clear", alt: "A messy pile of documents becomes a clear table", n: "2", t: "We check every line", d: "Locally, privacy first. Then we turn it into a clear overview.", bg: "bg-secondary" },
+            { clip: "email-brief", alt: "A short brief arrives in an inbox", n: "3", t: "You get the message", d: "A short list of actions by email, and a walk-through if you want one.", bg: "bg-card" },
+          ].map(({ clip, alt, n, t, d, bg }) => (
+            <Tile key={n} className={`${bg} p-4 pb-8 md:col-span-4`}>
+              <Clip name={clip} alt={alt} className="border-0" />
+              <div className="px-4 pt-6">
+                <span className="wordmark text-3xl text-plum">{n}</span>
                 <h3 className="mt-1 text-xl font-semibold">{t}</h3>
                 <p className="mt-2 text-muted-foreground">{d}</p>
-              </Reveal>
-            ))}
-          </div>
+              </div>
+            </Tile>
+          ))}
         </section>
 
-        {/* Who */}
-        <section className="px-5">
-          <Reveal className="mx-auto grid max-w-6xl overflow-hidden rounded-3xl bg-primary text-primary-foreground md:grid-cols-[2fr_3fr]">
-            <div className="h-64 md:h-auto"><Photo name="lantern" alt="A warm lantern in a dim restaurant" /></div>
-            <div className="flex flex-col justify-center px-8 py-12 md:px-14">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-butter">Who it is for</p>
-              <p className="mt-4 text-2xl font-medium leading-snug sm:text-3xl">
-                Built for owners of newer independent restaurants, cafes and bars who want clarity on invoices and sales.
-              </p>
-            </div>
-          </Reveal>
-        </section>
-
-        {/* Contact */}
-        <section id="contact" className="mx-auto grid max-w-6xl gap-12 px-5 py-24 md:grid-cols-5">
-          <Reveal className="md:col-span-2">
-            <p className={label}>Contact</p>
-            <h2 className="mt-4 text-3xl font-semibold sm:text-4xl">Let's look at your numbers together.</h2>
-            <p className="mt-4 text-muted-foreground">Tell us a bit about your venue and we'll get back to you within two working days.</p>
-            <a href="mailto:info@trufflemetrics.com" className="mt-8 inline-flex items-center gap-3 font-medium text-foreground underline-offset-4 hover:underline">
-              <Mail className="h-5 w-5" /> info@trufflemetrics.com
+        {/* Who and contact */}
+        <section id="contact" className="grid gap-4 md:grid-cols-12 md:gap-5">
+          <Tile className="min-h-[16rem] md:col-span-4 md:min-h-0">
+            <Photo name="lantern" alt="A warm lantern in a dim restaurant" className="absolute inset-0" />
+          </Tile>
+          <Tile className="flex flex-col justify-between gap-8 bg-primary p-8 text-primary-foreground sm:p-10 md:col-span-8">
+            <p className="text-2xl font-medium leading-snug sm:text-3xl">
+              Tell us about your venue. We read every message and reply within two working days.
+            </p>
+            <a href="mailto:info@trufflemetrics.com" className="inline-flex items-center gap-2 self-start rounded-full bg-butter px-5 py-3 text-sm font-semibold text-ink transition hover:brightness-95">
+              <Mail className="h-4 w-4" /> info@trufflemetrics.com <ArrowUpRight className="h-4 w-4" />
             </a>
-          </Reveal>
-          <Reveal className="md:col-span-3"><ContactForm /></Reveal>
+          </Tile>
+          <Tile className="bg-card md:col-span-12"><ContactForm /></Tile>
         </section>
       </main>
 
-      <footer className="bg-primary text-primary-foreground">
+      <footer>
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-5 py-10 md:flex-row md:items-center md:justify-between">
           <div>
-            <a href="#top" className="text-xl font-semibold tracking-tight">truffle<span className="ml-1.5 font-normal opacity-60">metrics</span></a>
-            <p className="mt-1 text-sm opacity-70">Clarity for hospitality.</p>
+            <Wordmark />
+            <p className="mt-2 text-sm text-muted-foreground">Clarity for hospitality.</p>
           </div>
-          <div className="flex flex-wrap gap-5 text-sm opacity-80">
-            {links.map((l) => <a key={l.href} href={l.href} className="hover:opacity-100">{l.label}</a>)}
+          <div className="flex flex-wrap gap-5 text-sm text-muted-foreground">
+            {links.map((l) => <a key={l.href} href={l.href} className="hover:text-foreground">{l.label}</a>)}
           </div>
-          <p className="text-sm opacity-70">© {new Date().getFullYear()} Truffle Metrics</p>
+          <div className="text-sm text-muted-foreground md:text-right">
+            <p>© {new Date().getFullYear()} Truffle Metrics</p>
+            <p className="mt-1 text-xs">Photos: Unsplash</p>
+          </div>
         </div>
       </footer>
     </div>
@@ -284,7 +308,7 @@ function ContactForm() {
 
   if (sent) {
     return (
-      <div className="rounded-3xl border border-border bg-card p-10 text-center shadow-soft" role="status">
+      <div className="p-10 text-center" role="status">
         <CheckCircle2 className="mx-auto h-10 w-10 text-plum" />
         <h3 className="mt-4 text-2xl font-semibold">Thanks, message received!</h3>
         <p className="mt-2 text-muted-foreground">We'll get back to you within two working days.</p>
@@ -305,7 +329,7 @@ function ContactForm() {
   );
 
   return (
-    <form noValidate onSubmit={onSubmit} className="space-y-5 rounded-3xl border border-border bg-card p-7 shadow-soft sm:p-9">
+    <form noValidate onSubmit={onSubmit} className="space-y-5 p-7 sm:p-10">
       <div className="grid gap-5 sm:grid-cols-2">
         {field("name", "Name")}
         {field("email", "Email", "email")}
