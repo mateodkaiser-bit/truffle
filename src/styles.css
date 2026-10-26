@@ -5,8 +5,13 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-display: "Fraunces", Georgia, serif;
-  --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "Instrument Sans", system-ui, sans-serif;
+  --font-sans: "Instrument Sans", system-ui, sans-serif;
+  --color-ink: var(--ink);
+  --color-plum: var(--plum);
+  --color-butter: var(--butter);
+  --color-paper: var(--paper);
+  --color-ember: var(--ember);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -35,31 +40,36 @@
 
 :root {
   --radius: 1rem;
-  --background: oklch(0.977 0.012 80);
-  --foreground: oklch(0.23 0.025 45);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.23 0.025 45);
-  --primary: oklch(0.37 0.06 162);
-  --primary-foreground: oklch(0.977 0.012 80);
-  --secondary: oklch(0.94 0.02 80);
-  --secondary-foreground: oklch(0.23 0.025 45);
-  --muted: oklch(0.94 0.018 80);
-  --muted-foreground: oklch(0.45 0.025 50);
-  --accent: oklch(0.78 0.14 70);
-  --accent-foreground: oklch(0.23 0.025 45);
-  --destructive: oklch(0.55 0.2 27);
-  --border: oklch(0.9 0.02 75);
-  --input: oklch(0.88 0.02 75);
-  --ring: oklch(0.37 0.06 162);
-  --shadow-soft-v: 0 2px 12px -4px oklch(0.23 0.025 45 / 0.08);
-  --shadow-card-v: 0 24px 60px -20px oklch(0.23 0.025 45 / 0.22);
+  --ink: #1E1517;
+  --plum: #5B2A3C;
+  --butter: #F2E3AE;
+  --paper: #F6F3EE;
+  --ember: #E2492B;
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: #FBF9F5;
+  --card-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--paper);
+  --secondary: var(--butter);
+  --secondary-foreground: var(--ink);
+  --muted: #ECE7DF;
+  --muted-foreground: #5B5154;
+  --accent: var(--ember);
+  --accent-foreground: #FFFFFF;
+  --destructive: var(--ember);
+  --border: #DDD6CC;
+  --input: #CFC7BC;
+  --ring: var(--ink);
+  --shadow-soft-v: 0 1px 2px rgba(30, 21, 23, 0.06);
+  --shadow-card-v: 0 24px 60px -24px rgba(30, 21, 23, 0.28);
 }
 
 @layer base {
   * { border-color: var(--color-border); }
   html { scroll-behavior: smooth; }
   body { background-color: var(--color-background); color: var(--color-foreground); font-family: var(--font-sans); }
-  h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.01em; }
+  h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.03em; }
   section[id] { scroll-margin-top: 5rem; }
 }
 
@@ -72,4 +82,10 @@
 @media (prefers-reduced-motion: reduce) {
   .reveal { opacity: 1; transform: none; transition: none; }
   html { scroll-behavior: auto; }
+}
+
+@utility grain {
+  background-image: url("/photos/butter-gradient.jpg");
+  background-size: cover;
+  background-position: center;
 }
