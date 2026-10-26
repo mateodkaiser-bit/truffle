@@ -183,8 +183,8 @@ function Index() {
             <p className="text-2xl font-semibold leading-tight">We come to you. No login, no dashboard.</p>
           </Tile>
           <Tile className="min-h-[11rem] md:col-span-4">
-            <Photo name="receipt-pile" alt="A pile of crumpled receipts" className="absolute inset-0" />
-            <Sticker className={`${cap} -rotate-3`}>the pile we love to read</Sticker>
+            <Photo name="desk-calc" alt="A calculator, pens and an envelope on an office desk" className="absolute inset-0 object-[50%_70%]" />
+            <Sticker className={`${cap} -rotate-3`}>where the checking happens</Sticker>
           </Tile>
         </section>
 
