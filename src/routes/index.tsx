@@ -177,10 +177,10 @@ function Index() {
           </Tile>
           <Tile className="min-h-[24rem] md:col-span-5 md:row-span-3 md:min-h-0">
             <Photo eager name="chef" alt="A chef plating food in a busy restaurant kitchen" className="absolute inset-0 object-[40%_50%]" />
-            <Sticker className="absolute right-5 top-5 rotate-3">invoice in, WhatsApp out</Sticker>
+            <Sticker className="absolute right-5 top-5 rotate-3">invoice in, insights out</Sticker>
           </Tile>
           <Tile className="grain flex min-h-[11rem] flex-col justify-end p-8 md:col-span-3">
-            <p className="text-2xl font-semibold leading-tight">We come to you. No login, no dashboard.</p>
+            <p className="text-2xl font-semibold leading-tight">We come to you. No login, no dashboard needed.</p>
           </Tile>
           <Tile className="min-h-[11rem] md:col-span-4">
             <Photo name="desk-calc" alt="A calculator, pens and an envelope on an office desk" className="absolute inset-0 object-[50%_70%]" />
@@ -202,19 +202,18 @@ function Index() {
             <blockquote className="max-w-3xl font-display [font-variation-settings:'SOFT'_100,'opsz'_96] text-4xl font-semibold leading-[1.05] sm:text-6xl">
               “You run on <span className="text-butter">feeling</span>, not <span className="text-butter">facts</span>.”
             </blockquote>
-            <p className="text-sm text-paper/70">A head of procurement in horeca, in one of our 60 restaurant visits</p>
-          </Tile>
-          <Tile className={`${photoTile} md:col-span-4`}>
-            <Photo name="counter-pay" alt="A guest paying at a restaurant bar" className="absolute inset-0" />
-            <Sticker className={`${cap} -rotate-2`}>sales in five places</Sticker>
+            <p className="text-sm text-paper/70">A head of procurement in horeca</p>
           </Tile>
           <Tile className={`${photoTile} md:col-span-4`}>
             <Photo name="crates" alt="Stacked drinks crates in a storeroom" className="absolute inset-0" />
-            <Sticker className={`${cap} rotate-2`}>margins you can't see</Sticker>
+            <Sticker className={`${cap} rotate-2`}>prices creep up quietly</Sticker>
           </Tile>
           <Tile className={`${photoTile} md:col-span-4`}>
             <Photo name="receipts-dispenser" alt="Order tickets hanging on a rail" className="absolute inset-0 object-[50%_30%]" />
-            <Sticker className={`${cap} -rotate-3`}>month over before you notice</Sticker>
+            <Sticker className={`${cap} -rotate-3`}>no time to check</Sticker>
+          </Tile>
+          <Tile className={`grain-deep flex flex-col justify-end p-8 sm:p-10 ${photoTile} md:col-span-4`}>
+            <p className="text-3xl font-semibold leading-tight">The month is over before you notice.</p>
           </Tile>
         </section>
 
