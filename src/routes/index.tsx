@@ -83,26 +83,35 @@ function Photo({ name, alt, className = "", eager = false }: { name: string; alt
   );
 }
 
-/** The truffle dot from the brand sheet: an ember ball with cracked veins. */
-function TruffleDot({ className = "" }: { className?: string }) {
+function Wordmark() {
   return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden>
-      <defs><clipPath id="td"><circle cx="50" cy="50" r="48" /></clipPath></defs>
-      <circle cx="50" cy="50" r="48" fill="var(--ember)" />
-      <g clipPath="url(#td)" stroke="var(--paper)" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
-        <path d="M4 36 L30 30 L46 8 M30 30 L38 54 L14 70 M38 54 L66 46 L96 22 M66 46 L74 76 L52 98 M14 70 L22 98 M74 76 L98 80 M46 8 L68 4" />
-      </g>
-    </svg>
+    <a href="#top" className="inline-flex items-baseline gap-1 leading-none" aria-label="truffle metrics">
+      <span className="wordmark text-[1.7rem]">truffle</span>
+      <span className="h-[0.6rem] w-[0.6rem] rounded-full bg-ember" aria-hidden />
+      <span className="ml-1 text-sm font-medium text-muted-foreground">metrics</span>
+    </a>
   );
 }
 
-function Wordmark({ light = false }: { light?: boolean }) {
+/** A little rotated label stuck on a photo or tile. */
+function Sticker({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <a href="#top" className="inline-flex items-baseline gap-1.5 leading-none" aria-label="truffle metrics">
-      <span className="wordmark text-[1.7rem]">truffle</span>
-      <TruffleDot className="-mx-0.5 h-[0.65rem] w-[0.65rem] self-end" />
-      <span className={`text-sm font-medium ${light ? "opacity-70" : "text-muted-foreground"}`}>metrics</span>
-    </a>
+    <span className={`inline-block rounded-full bg-butter px-4 py-2 text-sm font-semibold text-ink shadow-soft ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+/** Two chat bubbles: the owner forwards an invoice, we push the answer back. */
+function ChatMock() {
+  return (
+    <div className="flex flex-col gap-3" role="img" aria-label="Example chat: an owner forwards an invoice and gets a short alert back">
+      <div className="self-end rounded-2xl rounded-br-sm bg-card px-4 py-3 text-sm font-medium shadow-soft">invoice.pdf</div>
+      <div className="max-w-[17rem] self-start rounded-2xl rounded-bl-sm bg-ink px-4 py-3 text-sm text-paper shadow-soft">
+        One line moved this month. Worth a call before you pay.
+        <span className="mt-2 block h-1.5 w-1/2 rounded-full bg-ember" />
+      </div>
+    </div>
   );
 }
 
@@ -118,7 +127,8 @@ function Index() {
     return () => io.disconnect();
   }, []);
 
-  const scrim = "absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/85 via-ink/45 to-transparent p-6 pt-20 text-paper";
+  const photoTile = "min-h-[16rem] md:min-h-[19rem]";
+  const cap = "absolute bottom-4 left-4";
 
   return (
     <div id="top" className="min-h-screen">
@@ -149,116 +159,126 @@ function Index() {
         {/* Hero */}
         <section className="grid gap-4 md:grid-cols-12 md:gap-5">
           <Tile className="bg-card p-8 sm:p-12 md:col-span-7 md:row-span-2">
-            <p className={label}>Invoices, checked for you</p>
-            <h1 className="mt-5 text-5xl font-semibold leading-[1] text-foreground sm:text-6xl lg:text-7xl">
-              Know where your margin <span className="text-ember">really</span> goes.
+            <h1 className="text-5xl font-semibold leading-[0.98] text-foreground sm:text-6xl lg:text-7xl">
+              Know where your margin{" "}
+              <span className="relative inline-block text-ember">
+                really
+                <svg viewBox="0 0 200 12" preserveAspectRatio="none" className="absolute -bottom-1 left-0 h-2.5 w-full" aria-hidden>
+                  <path d="M2 8 C 25 2, 45 12, 70 6 S 120 2, 140 7 S 180 10, 198 4" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
+                </svg>
+              </span>{" "}
+              goes.
             </h1>
-            <p className="mt-6 max-w-lg text-lg text-muted-foreground">
-              Hand us your supplier invoices. You get back a short message with what to check and what it is worth. No login, no dashboard.
-            </p>
+            <p className="mt-6 max-w-sm text-lg text-muted-foreground">Forward us your invoices. We message you what to check, on WhatsApp or email.</p>
             <div className="mt-8 flex flex-wrap gap-3">
               <a href="#contact" className={btnPrimary}>Talk to us</a>
               <a href="#how" className={btnOutline}>See how it works</a>
             </div>
           </Tile>
-          <Tile className="min-h-[22rem] md:col-span-5 md:row-span-3 md:min-h-0">
+          <Tile className="min-h-[24rem] md:col-span-5 md:row-span-3 md:min-h-0">
             <Photo eager name="chef" alt="A chef plating food in a busy restaurant kitchen" className="absolute inset-0 object-[40%_50%]" />
-            <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-border bg-card/95 p-4 shadow-card backdrop-blur sm:inset-x-6 sm:bottom-6">
-              <p className={label}>Example message</p>
-              <p className="mt-2 text-sm font-medium">One price line moved this month. Worth a call before you pay.</p>
-              <span className="mt-3 block h-1.5 w-2/3 rounded-full bg-ember" />
-            </div>
+            <Sticker className="absolute right-5 top-5 rotate-3">invoice in, WhatsApp out</Sticker>
           </Tile>
-          <Tile className="grain flex flex-col justify-between gap-6 p-8 md:col-span-4">
-            <p className={label}>The idea</p>
-            <p className="text-3xl font-semibold leading-tight">We check. You get the message.</p>
+          <Tile className="grain flex min-h-[11rem] flex-col justify-end p-8 md:col-span-3">
+            <p className="text-2xl font-semibold leading-tight">We come to you. No login, no dashboard.</p>
           </Tile>
-          <Tile className="flex items-center justify-between gap-4 bg-primary p-8 text-primary-foreground md:col-span-3">
-            <p className="text-lg font-medium leading-snug">Built for newer independent restaurants.</p>
-            <TruffleDot className="h-14 w-14 shrink-0" />
+          <Tile className="min-h-[11rem] md:col-span-4">
+            <Photo name="receipt-pile" alt="A pile of crumpled receipts" className="absolute inset-0" />
+            <Sticker className={`${cap} -rotate-3`}>the pile we love to read</Sticker>
           </Tile>
         </section>
 
         {/* Problem */}
         <section id="problem" className="grid gap-4 md:grid-cols-12 md:gap-5">
-          <Tile className="bg-card p-8 sm:p-12 md:col-span-5">
+          <Tile className="grain-flip flex flex-col justify-between gap-6 p-8 sm:p-10 md:col-span-4">
             <p className={label}>The problem</p>
-            <h2 className="mt-4 text-3xl font-semibold sm:text-4xl">Running a restaurant is hard enough without the spreadsheet chaos.</h2>
+            <h2 className="text-4xl font-semibold leading-none sm:text-5xl">Sound familiar?</h2>
           </Tile>
-          {[
-            { img: "paper-stack", alt: "A tall stack of paper invoices", t: "Invoices everywhere", d: "Dozens of suppliers, paper and PDF. Nobody has the full picture.", c: "md:col-span-7" },
-            { img: "counter-pay", alt: "A guest paying at a restaurant bar", t: "Sales split across systems", d: "POS, delivery apps and bar sales all report differently.", c: "md:col-span-6" },
-            { img: "crates", alt: "Stacked drinks crates in a storeroom", t: "Margins you can't see", d: "Prices drift and waste adds up. By the time you notice, the month is over.", c: "md:col-span-6" },
-          ].map(({ img, alt, t, d, c }) => (
-            <Tile key={t} className={`min-h-[18rem] md:min-h-[20rem] ${c}`}>
-              <Photo name={img} alt={alt} className="absolute inset-0" />
-              <div className={scrim}>
-                <h3 className="text-2xl font-semibold">{t}</h3>
-                <p className="mt-1 max-w-md text-sm text-paper/85">{d}</p>
-              </div>
-            </Tile>
-          ))}
+          <Tile className={`${photoTile} md:col-span-8`}>
+            <Photo name="paper-stack" alt="A tall stack of paper invoices" className="absolute inset-0" />
+            <Sticker className={`${cap} rotate-2`}>invoices, everywhere</Sticker>
+          </Tile>
+          <Tile className="flex flex-col justify-between gap-8 bg-primary p-8 text-primary-foreground sm:p-12 md:col-span-12">
+            <blockquote className="max-w-3xl font-display [font-variation-settings:'SOFT'_100,'opsz'_96] text-4xl font-semibold leading-[1.05] sm:text-6xl">
+              “You run on <span className="text-butter">feeling</span>, not <span className="text-butter">facts</span>.”
+            </blockquote>
+            <p className="text-sm text-paper/70">A head of procurement in horeca, in one of our 60 restaurant visits</p>
+          </Tile>
+          <Tile className={`${photoTile} md:col-span-4`}>
+            <Photo name="counter-pay" alt="A guest paying at a restaurant bar" className="absolute inset-0" />
+            <Sticker className={`${cap} -rotate-2`}>sales in five places</Sticker>
+          </Tile>
+          <Tile className={`${photoTile} md:col-span-4`}>
+            <Photo name="crates" alt="Stacked drinks crates in a storeroom" className="absolute inset-0" />
+            <Sticker className={`${cap} rotate-2`}>margins you can't see</Sticker>
+          </Tile>
+          <Tile className={`${photoTile} md:col-span-4`}>
+            <Photo name="receipts-dispenser" alt="Order tickets hanging on a rail" className="absolute inset-0 object-[50%_30%]" />
+            <Sticker className={`${cap} -rotate-3`}>month over before you notice</Sticker>
+          </Tile>
         </section>
 
         {/* Solution */}
         <section id="solution" className="grid gap-4 md:grid-cols-12 md:gap-5">
-          <Tile className="grain p-8 sm:p-12 md:col-span-7">
+          <Tile className="grain flex flex-col justify-between gap-8 p-8 sm:p-10 md:col-span-5">
             <p className={label}>Our solution</p>
-            <h2 className="mt-4 text-3xl font-semibold sm:text-5xl">One clear view of costs, sales and margins.</h2>
-            <ol className="mt-8 space-y-5">
-              {[
-                { t: "Structured data", d: "Invoices and sales cleaned into one consistent set." },
-                { t: "Insights that matter", d: "Cost trends, supplier price changes and outliers." },
-                { t: "Advice you can act on", d: "Plain language, with next steps for your venue." },
-              ].map(({ t, d }, i) => (
-                <li key={t} className="flex gap-4">
-                  <span className="wordmark text-2xl text-plum">{i + 1}</span>
-                  <p><span className="font-semibold">{t}.</span> <span className="text-foreground/75">{d}</span></p>
-                </li>
-              ))}
-            </ol>
+            <h2 className="text-4xl font-semibold leading-[1.05] sm:text-5xl">
+              We check.<br />You get the message.
+            </h2>
           </Tile>
-          <Tile className="bg-card p-4 md:col-span-5">
+          <Tile className="bg-card p-4 md:col-span-7">
             <Clip name="price-alert" alt="A supplier price list is checked and a price rise becomes an alert" className="border-0" />
+          </Tile>
+          <Tile className="grain-deep flex flex-col justify-between gap-6 p-8 md:col-span-4">
+            <p className="text-3xl font-semibold leading-tight">We push it to you. You never log in.</p>
+            <ChatMock />
+          </Tile>
+          <Tile className={`${photoTile} md:col-span-4`}>
+            <Photo name="phone-pay" alt="A guest paying with a phone at a restaurant counter" className="absolute inset-0" />
+          </Tile>
+          <Tile className={`${photoTile} md:col-span-4`}>
+            <Photo name="prep" alt="A cook prepping in a restaurant kitchen" className="absolute inset-0" />
+            <Sticker className={`${cap} rotate-2`}>WhatsApp or email</Sticker>
           </Tile>
         </section>
 
         {/* How */}
         <section id="how" className="grid gap-4 md:grid-cols-12 md:gap-5">
-          <Tile className="flex flex-col justify-end bg-primary p-8 text-primary-foreground sm:p-12 md:col-span-12">
+          <Tile className="flex flex-col justify-between gap-8 bg-primary p-8 text-primary-foreground sm:p-10 md:col-span-5">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-butter">How it works</p>
-            <h2 className="mt-4 max-w-2xl text-3xl font-semibold sm:text-5xl">Simple to start, useful from week one.</h2>
+            <h2 className="text-4xl font-semibold leading-[1.05] sm:text-5xl">Three steps. That's it.</h2>
+          </Tile>
+          <Tile className="min-h-[14rem] md:col-span-7 md:min-h-0">
+            <Photo name="busy" alt="A busy restaurant dining room at lunch" className="absolute inset-0" />
           </Tile>
           {[
-            { clip: "three-sources", alt: "Invoices and sales data flow into one place", n: "1", t: "Share your invoices", d: "Forward them as they arrive. Sales exports are a bonus.", bg: "bg-card" },
-            { clip: "messy-to-clear", alt: "A messy pile of documents becomes a clear table", n: "2", t: "We check every line", d: "Locally, privacy first. Then we turn it into a clear overview.", bg: "bg-secondary" },
-            { clip: "email-brief", alt: "A short brief arrives in an inbox", n: "3", t: "You get the message", d: "A short list of actions by email, and a walk-through if you want one.", bg: "bg-card" },
-          ].map(({ clip, alt, n, t, d, bg }) => (
-            <Tile key={n} className={`${bg} p-4 pb-8 md:col-span-4`}>
+            { clip: "three-sources", alt: "Invoices and sales data flow into one place", n: "1", t: "Send us your invoices", bg: "bg-card" },
+            { clip: "messy-to-clear", alt: "A messy pile of documents becomes a clear table", n: "2", t: "We check every line", bg: "grain-flip" },
+            { clip: "email-brief", alt: "A short brief arrives in an inbox", n: "3", t: "It lands in WhatsApp or email", bg: "bg-card" },
+          ].map(({ clip, alt, n, t, bg }) => (
+            <Tile key={n} className={`${bg} p-4 pb-7 md:col-span-4`}>
               <Clip name={clip} alt={alt} className="border-0" />
-              <div className="px-4 pt-6">
+              <div className="flex items-center gap-3 px-3 pt-5">
                 <span className="wordmark text-3xl text-plum">{n}</span>
-                <h3 className="mt-1 text-xl font-semibold">{t}</h3>
-                <p className="mt-2 text-muted-foreground">{d}</p>
+                <h3 className="text-xl font-semibold">{t}</h3>
               </div>
             </Tile>
           ))}
         </section>
 
-        {/* Who and contact */}
+        {/* Contact */}
         <section id="contact" className="grid gap-4 md:grid-cols-12 md:gap-5">
-          <Tile className="min-h-[16rem] md:col-span-4 md:min-h-0">
-            <Photo name="lantern" alt="A warm lantern in a dim restaurant" className="absolute inset-0" />
+          <Tile className="min-h-[18rem] md:col-span-4 md:row-span-2 md:min-h-0">
+            <Photo name="kitchen" alt="A cook working in a dim, warm kitchen" className="absolute inset-0" />
+            <Sticker className="absolute left-5 top-5 -rotate-3">open for new pilots</Sticker>
           </Tile>
-          <Tile className="flex flex-col justify-between gap-8 bg-primary p-8 text-primary-foreground sm:p-10 md:col-span-8">
-            <p className="text-2xl font-medium leading-snug sm:text-3xl">
-              Tell us about your venue. We read every message and reply within two working days.
-            </p>
+          <Tile className="flex flex-col justify-between gap-6 bg-primary p-8 text-primary-foreground sm:p-10 md:col-span-8">
+            <h2 className="text-4xl font-semibold leading-[1.05] sm:text-5xl">Say hello.</h2>
             <a href="mailto:info@trufflemetrics.com" className="inline-flex items-center gap-2 self-start rounded-full bg-butter px-5 py-3 text-sm font-semibold text-ink transition hover:brightness-95">
               <Mail className="h-4 w-4" /> info@trufflemetrics.com <ArrowUpRight className="h-4 w-4" />
             </a>
           </Tile>
-          <Tile className="bg-card md:col-span-12"><ContactForm /></Tile>
+          <Tile className="bg-card md:col-span-8"><ContactForm /></Tile>
         </section>
       </main>
 

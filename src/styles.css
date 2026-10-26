@@ -89,6 +89,16 @@
   background-size: cover;
   background-position: center;
 }
+@utility grain-flip {
+  background-image: url("/photos/butter-gradient.jpg");
+  background-size: 220% 220%;
+  background-position: 100% 0%;
+}
+@utility grain-deep {
+  background-image: url("/photos/butter-gradient.jpg");
+  background-size: 260% 260%;
+  background-position: 100% 100%;
+}
 
 @utility wordmark {
   font-family: var(--font-display);
