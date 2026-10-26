@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { z } from "zod";
-import { Mail, CheckCircle2, Menu, X, ArrowUpRight } from "lucide-react";
+import { Mail, CheckCircle2, Menu, X, ArrowUpRight, AlertCircle } from "lucide-react";
+import { submitContact, contactSchema } from "@/lib/contact.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -301,21 +302,18 @@ function Index() {
   );
 }
 
-const schema = z.object({
-  name: z.string().trim().min(1, "Please enter your name").max(100),
-  email: z.string().trim().email("Please enter a valid email").max(255),
-  venue: z.string().trim().min(1, "Please enter your venue name").max(150),
-  message: z.string().trim().min(1, "Please write a short message").max(1000),
-});
-type Errors = Partial<Record<keyof z.infer<typeof schema>, string>>;
+type Errors = Partial<Record<keyof import("zod").infer<typeof contactSchema>, string>>;
 
 function ContactForm() {
   const [errors, setErrors] = useState<Errors>({});
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const submitFn = useServerFn(submitContact);
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const r = schema.safeParse(Object.fromEntries(new FormData(e.currentTarget)));
+    const r = contactSchema.safeParse(Object.fromEntries(new FormData(e.currentTarget)));
     if (!r.success) {
       const errs: Errors = {};
       r.error.issues.forEach((i) => (errs[i.path[0] as keyof Errors] ??= i.message));
@@ -323,7 +321,16 @@ function ContactForm() {
       return;
     }
     setErrors({});
-    setSent(true);
+    setFailed(false);
+    setSending(true);
+    try {
+      await submitFn({ data: r.data });
+      setSent(true);
+    } catch {
+      setFailed(true);
+    } finally {
+      setSending(false);
+    }
   }
 
   if (sent) {
@@ -356,7 +363,14 @@ function ContactForm() {
       </div>
       {field("venue", "Venue name")}
       {field("message", "Message", "textarea")}
-      <button type="submit" className={btnPrimary}>Send message</button>
+      {failed && (
+        <p className="flex items-center gap-2 text-sm text-destructive" role="alert">
+          <AlertCircle className="h-4 w-4" /> Sorry, that didn't go through. Please try again, or email info@trufflemetrics.com.
+        </p>
+      )}
+      <button type="submit" disabled={sending} className={btnPrimary + (sending ? " cursor-wait opacity-70" : "")}>
+        {sending ? "Sending…" : "Send message"}
+      </button>
     </form>
   );
 }
