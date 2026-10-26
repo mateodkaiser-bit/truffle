@@ -363,7 +363,14 @@ function ContactForm() {
       </div>
       {field("venue", "Venue name")}
       {field("message", "Message", "textarea")}
-      <button type="submit" className={btnPrimary}>Send message</button>
+      {failed && (
+        <p className="flex items-center gap-2 text-sm text-destructive" role="alert">
+          <AlertCircle className="h-4 w-4" /> Sorry, that didn't go through. Please try again, or email info@trufflemetrics.com.
+        </p>
+      )}
+      <button type="submit" disabled={sending} className={btnPrimary + (sending ? " cursor-wait opacity-70" : "")}>
+        {sending ? "Sending…" : "Send message"}
+      </button>
     </form>
   );
 }
