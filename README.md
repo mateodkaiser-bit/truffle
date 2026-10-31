@@ -27,3 +27,44 @@ npm run dev
 - TypeScript
 - React
 - Tailwind CSS
+
+## CRM (`/crm`)
+
+A team-only CRM with a map, behind Supabase login: organisations (restaurants, suppliers,
+wholesalers, accountants, POS vendors), their contacts and every email, call and visit. It replaces
+Spotmapper: tap the map to log a visit, tick who was there, and the dot takes the stage colour.
+
+- Data lives only in Supabase. Row level security lets a signed-in user read or write only when
+  their email is in `crm_team`. Nothing CRM-related is ever committed here: this repo is public.
+- Schema: `supabase/migrations/20261101090000_crm.sql`.
+- Add a team member (SQL editor): `insert into public.crm_team (email, name) values ('a@b.nl', 'Firstname');`
+  The name is what shows on the @chips and the visit leaderboard. They then sign in on `/crm`
+  with a password or a login link.
+- Local preview with made-up data, no login: `bun run dev --port 8080`, then open
+  `http://localhost:8080/crm?demo=1` (dev server only).
+- Map tiles: PDOK BRT achtergrondkaart. Nearby places when logging: OpenStreetMap (Overpass).
+  Addresses: PDOK Locatieserver. All free, no keys.
+
+### CRM import (run locally)
+
+`scripts/crm-import.ts` reads the lead files on your own machine and writes them to Supabase as a
+team member. It never reads pilot invoice data or anything in `~/truffle-pilots/raw`.
+
+```sh
+cd ~/truffle
+# 1. Check what would be imported (writes nothing)
+CRM_SPOTMAPPER_CSV=~/Downloads/visits-export-....csv bun scripts/crm-import.ts --dry-run
+# 2. Import
+CRM_SPOTMAPPER_CSV=~/Downloads/visits-export-....csv \
+  TRUFFLE_CRM_EMAIL=you@example.com TRUFFLE_CRM_PASSWORD=... bun scripts/crm-import.ts
+```
+
+Sources, all outside this repo: the supplier, accountant and restaurant lead CSVs, the outreach
+log and a hand-written overrides file (replies, promises, pilots) in
+`~/truffle-pilots/work/external`; the newest `~/truffle-leads/data/leads-DATE.csv`; the Spotmapper
+export. Paths can be changed with `CRM_DATA_DIR`, `CRM_LEADS_DIR`, `CRM_OVERRIDES` and
+`CRM_SPOTMAPPER_CSV`. Rows without coordinates are geocoded with PDOK and OSM, cached in
+`CRM_GEOCODE_CACHE`; places only known by city get the tag `approx-location`.
+
+Every row has a stable `external_ref`, so a re-run only adds new rows and keeps what the team
+changed in the app. `--refresh` overwrites imported fields on existing rows.
