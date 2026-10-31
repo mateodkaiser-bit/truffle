@@ -15,6 +15,14 @@ describe("crm filters", () => {
     expect(countByStage(DEMO_ORGS, f, today).declined).toBe(1);
   });
 
+  it("hides pipeline leads by status but always shows other organisations", () => {
+    const f = { ...DEFAULT_FILTERS, hiddenLeadStatus: ["unverified" as const] };
+    const names = applyFilters(DEMO_ORGS, f, today).map((o) => o.name);
+    expect(names).not.toContain("Eethuis Noorderlicht");
+    expect(names).toContain("Restaurant Gras");
+    expect(names).toContain("Koffiebranderij Zuidwind");
+  });
+
   it("matches search words in any order, ignoring accents and case", () => {
     const f = { ...DEFAULT_FILTERS, q: "zuidwind KOFFIE" };
     expect(applyFilters(DEMO_ORGS, f, today).map((o) => o.name)).toEqual([

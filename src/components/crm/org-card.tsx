@@ -197,7 +197,7 @@ export function OrgCard({ org }: { org: Organization }) {
             {org.hook && <Field label="Why they fit">{org.hook}</Field>}
             {org.promised && <Field label="What we promised">{org.promised}</Field>}
             {org.they_asked && <Field label="What they asked">{org.they_asked}</Field>}
-            {org.pitch_angle && <Field label="Pitch angle">{org.pitch_angle}</Field>}
+            {org.pitch_angle && <Field label="Opener">{org.pitch_angle}</Field>}
             {org.opening_hours && <Field label="Opening hours">{org.opening_hours}</Field>}
             {!org.hook && !org.promised && !org.they_asked && !org.pitch_angle && (
               <p className="text-sm text-muted-foreground">Nothing noted yet.</p>
@@ -437,7 +437,7 @@ function EditNotes({ org, onSave }: { org: Organization; onSave: (p: OrgPatch) =
     ["hook", "Why they fit"],
     ["promised", "What we promised"],
     ["they_asked", "What they asked"],
-    ["pitch_angle", "Pitch angle"],
+    ["pitch_angle", "Opener"],
     ["opening_hours", "Opening hours"],
     ["phone", "Phone"],
     ["notes", "Notes"],

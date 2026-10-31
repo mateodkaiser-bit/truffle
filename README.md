@@ -61,8 +61,12 @@ CRM_SPOTMAPPER_CSV=~/Downloads/visits-export-....csv \
 
 Sources, all outside this repo: the supplier, accountant and restaurant lead CSVs, the outreach
 log and a hand-written overrides file (replies, promises, pilots) in
-`~/truffle-pilots/work/external`; the newest `~/truffle-leads/data/leads-DATE.csv`; the Spotmapper
-export. Paths can be changed with `CRM_DATA_DIR`, `CRM_LEADS_DIR`, `CRM_OVERRIDES` and
+`~/truffle-pilots/work/external`; the newest `leads-DATE.csv` and `insights-DATE.csv` from the lead
+pipeline in `~/truffle-leads/data`; the Spotmapper export. From the pipeline only open or unverified
+restaurants and cafes are imported (tag `lead-open` or `lead-unverified`, keyed on `lead_id`), with
+the price comparison lines as the card's opener. `--all-leads` also imports the other types, the
+places still to check and the likely-closed file (as declined); the map hides those last two until
+they are switched on under Filters. Paths can be changed with `CRM_DATA_DIR`, `CRM_LEADS_DIR`, `CRM_OVERRIDES` and
 `CRM_SPOTMAPPER_CSV`. Rows without coordinates are geocoded with PDOK and OSM, cached in
 `CRM_GEOCODE_CACHE`; places only known by city get the tag `approx-location`.
 

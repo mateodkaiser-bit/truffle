@@ -6,7 +6,16 @@ import { Toaster } from "@/components/ui/sonner";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { checkMembership, isDemoMode, setDemoMode, useLeaderboard, useOrgs } from "@/lib/crm/api";
-import { applyFilters, countByStage, DEFAULT_FILTERS, type CrmFilters } from "@/lib/crm/filters";
+import {
+  applyFilters,
+  countByStage,
+  DEFAULT_FILTERS,
+  LEAD_STATUS_LABEL,
+  LEAD_STATUSES,
+  leadStatus,
+  type CrmFilters,
+  type LeadStatus,
+} from "@/lib/crm/filters";
 import { STAGE_META, TYPE_LABEL } from "@/lib/crm/stages";
 import { ORG_TYPES, STAGES, type OrgType, type Organization } from "@/lib/crm/types";
 import { CrmLogin } from "@/components/crm/crm-login";
@@ -92,7 +101,16 @@ function Crm() {
     filters.types.length +
     (filters.city ? 1 : 0) +
     (filters.tag ? 1 : 0) +
-    (filters.dueOnly ? 1 : 0);
+    (filters.dueOnly ? 1 : 0) +
+    (filters.hiddenLeadStatus.join() === DEFAULT_FILTERS.hiddenLeadStatus.join() ? 0 : 1);
+  const leadCounts = useMemo(() => {
+    const c: Partial<Record<LeadStatus, number>> = {};
+    for (const o of orgs) {
+      const s = leadStatus(o);
+      if (s) c[s] = (c[s] ?? 0) + 1;
+    }
+    return c;
+  }, [orgs]);
 
   const select = (id: string) => {
     setDraft(null);
@@ -159,6 +177,7 @@ function Crm() {
             set={set}
             cities={cities}
             tags={tags}
+            leadCounts={leadCounts}
             onReset={() => setFilters(DEFAULT_FILTERS)}
           />
         )}
@@ -310,12 +329,14 @@ function FilterPanel({
   set,
   cities,
   tags,
+  leadCounts,
   onReset,
 }: {
   filters: CrmFilters;
   set: (p: Partial<CrmFilters>) => void;
   cities: string[];
   tags: string[];
+  leadCounts: Partial<Record<LeadStatus, number>>;
   onReset: () => void;
 }) {
   const sel = "h-9 w-full rounded-md border border-input bg-background px-2 text-sm";
@@ -344,6 +365,32 @@ function FilterPanel({
           ))}
         </div>
       </div>
+      {LEAD_STATUSES.some((s) => leadCounts[s]) && (
+        <div>
+          <div className="mb-1.5 text-xs font-semibold">Lead status (new permits)</div>
+          <div className="flex flex-wrap gap-1.5">
+            {LEAD_STATUSES.filter((s) => leadCounts[s]).map((s) => {
+              const on = !filters.hiddenLeadStatus.includes(s);
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() =>
+                    set({
+                      hiddenLeadStatus: on
+                        ? [...filters.hiddenLeadStatus, s]
+                        : filters.hiddenLeadStatus.filter((x) => x !== s),
+                    })
+                  }
+                  className={`rounded-full border px-3 py-1 text-xs ${on ? "border-ink bg-ink text-paper" : "bg-background"}`}
+                >
+                  {LEAD_STATUS_LABEL[s]} {leadCounts[s]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <label className="text-xs font-semibold">
           City

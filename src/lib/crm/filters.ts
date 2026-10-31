@@ -7,7 +7,24 @@ export type CrmFilters = {
   tag: string;
   q: string;
   dueOnly: boolean;
+  /** Lead pipeline statuses to hide; organisations that are not pipeline leads always show. */
+  hiddenLeadStatus: LeadStatus[];
 };
+
+export const LEAD_STATUSES = ["open", "unverified", "check", "likely-closed"] as const;
+export type LeadStatus = (typeof LEAD_STATUSES)[number];
+export const LEAD_STATUS_LABEL: Record<LeadStatus, string> = {
+  open: "Open",
+  unverified: "Unverified",
+  check: "To check",
+  "likely-closed": "Likely closed",
+};
+
+/** Status from the import's lead-<status> tag, or null for organisations from other sources. */
+export function leadStatus(o: Organization): LeadStatus | null {
+  const t = o.tags.find((x) => x.startsWith("lead-"))?.slice(5);
+  return LEAD_STATUSES.find((s) => s === t) ?? null;
+}
 
 export const DEFAULT_FILTERS: CrmFilters = {
   stages: [...STAGES],
@@ -16,10 +33,14 @@ export const DEFAULT_FILTERS: CrmFilters = {
   tag: "",
   q: "",
   dueOnly: false,
+  hiddenLeadStatus: ["check", "likely-closed"],
 };
 
 const norm = (s: string | null | undefined) =>
-  (s ?? "").toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+  (s ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
 
 export function todayIso(now = new Date()) {
   const d = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
@@ -31,6 +52,8 @@ export function matchesBase(o: Organization, f: CrmFilters, today = todayIso()) 
   if (f.types.length && !f.types.includes(o.type)) return false;
   if (f.city && norm(o.city) !== norm(f.city)) return false;
   if (f.tag && !o.tags.includes(f.tag)) return false;
+  const ls = leadStatus(o);
+  if (ls && f.hiddenLeadStatus.includes(ls)) return false;
   if (f.dueOnly && !(o.next_step_due && o.next_step_due <= today)) return false;
   if (f.q) {
     const hay = norm(

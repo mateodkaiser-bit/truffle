@@ -2,6 +2,7 @@
 //
 //   bun scripts/crm-import.ts --dry-run                  # build everything, print a summary, write nothing
 //   TRUFFLE_CRM_EMAIL=... TRUFFLE_CRM_PASSWORD=... bun scripts/crm-import.ts
+//   ... --all-leads                                        # every pipeline lead, not only open restaurants
 //
 // The data files stay outside this public repo. Nothing from ~/truffle-pilots/raw or any invoice
 // data is read. The script signs in as a team member, so row level security applies as in the app.
@@ -24,6 +25,7 @@ const HOME = homedir();
 const args = new Set(process.argv.slice(2));
 const DRY = args.has("--dry-run");
 const REFRESH = args.has("--refresh");
+const ALL_LEADS = args.has("--all-leads");
 const env = (k: string, d = "") => process.env[k] ?? d;
 
 const DATA = env("CRM_DATA_DIR", join(HOME, "truffle-pilots/work/external"));
@@ -225,11 +227,13 @@ function addInteraction(
 /** Name lookup: exact normalised name, then one name starting with the other (both 4+ chars). */
 function findOrg(
   name: string,
-  opts: { type?: OrgType; city?: string; near?: [number, number] } = {},
+  opts: { type?: OrgType; notType?: OrgType; city?: string; near?: [number, number] } = {},
 ) {
   const key = norm(name);
   if (key.length < 3) return undefined;
-  const all = [...orgs.values()].filter((o) => !opts.type || o.type === opts.type);
+  const all = [...orgs.values()].filter(
+    (o) => (!opts.type || o.type === opts.type) && (!opts.notType || o.type !== opts.notType),
+  );
   const near = (o: OrgRow) =>
     !opts.near ||
     o.lat == null ||
@@ -304,53 +308,105 @@ function importAccountants() {
   }
 }
 
+/** Latest data/<prefix>-DATE.csv from the lead pipeline, or undefined. */
+function latestLeadFile(prefix: string) {
+  if (!existsSync(LEADS_DIR)) return undefined;
+  const re = new RegExp(`^${prefix}-\\d{4}-\\d{2}-\\d{2}\\.csv$`);
+  return readdirSync(LEADS_DIR)
+    .filter((f) => re.test(f))
+    .sort()
+    .at(-1);
+}
+
+const LEAD_TYPES = new Set(["restaurant", "cafe"]);
+const LEAD_STATUSES = new Set(["open", "unverified"]);
+
+/** One pipeline lead (truffle-leads score.py export) as an organisation, keyed on lead_id. */
+function leadOrg(r: Row, source: string, openers: Map<string, string[]>) {
+  const leadId = r["lead_id"]!;
+  const status = r["status"] || "unverified";
+  const signals = r["signals"] ?? "";
+  const o = blank(`lead:${leadId}`, r["name"] || r["address"] || leadId, "restaurant", source);
+  const permits = [r["first_permit"], r["latest_permit"]].filter(Boolean);
+  fill(o, {
+    category:
+      nn(r["cuisine"]?.replace(/;/g, ", ") ?? "") ?? nn((r["type"] ?? "").replace(/_/g, " ")),
+    city: nn(r["municipality"]),
+    address: nn(r["address"]),
+    postcode: nn(r["postcode"]),
+    lat: r["lat"] ? Number(r["lat"]) : null,
+    lon: r["lon"] ? Number(r["lon"]) : null,
+    website: nn(r["website"]),
+    email: firstEmail(r["email"] ?? ""),
+    instagram: nn(r["instagram"]),
+    phone: nn(r["phone"]),
+    opened_year: Number(signals.match(/since (\d{4})/)?.[1]) || null,
+    pos_hint:
+      signals.match(/lightspeed|tebi|untill|mr\.? ?winston|qr\/other pos/gi)?.join(", ") ?? null,
+    hook: nn(signals),
+    pitch_angle: openers.get(leadId)?.join("\n") ?? null,
+    notes: [
+      `Lead score ${r["score"]}. Status: ${status}${r["status_reasons"] ? ` (${r["status_reasons"]})` : ""}.`,
+      permits.length > 0 &&
+        `Permits ${r["permit_kinds"] ? `(${r["permit_kinds"]}) ` : ""}${[...new Set(permits)].join(" to ")}: ${r["permit_url"]}`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    tags: [
+      `lead-${status.replace(/_/g, "-")}`,
+      r["type"] ?? "",
+      openers.has(leadId) ? "price-insight" : "",
+    ].filter(Boolean),
+  });
+  if (status === "likely_closed") {
+    o.stage = "declined";
+    o.declined_reason = `Likely closed: ${r["status_reasons"] || "see lead pipeline"}`;
+  } else if (o.email || o.instagram || o.phone) o.stage = "enriched";
+  return o;
+}
+
+/**
+ * Lead pipeline exports in ~/truffle-leads/data (see its README). By default only places with
+ * status open or unverified and type restaurant or cafe; --all-leads adds the rest (to check,
+ * bars, fast food, unmapped permit addresses) and the likely-closed file as declined.
+ */
 function importLeads() {
-  const files = existsSync(LEADS_DIR)
-    ? readdirSync(LEADS_DIR)
-        .filter((f) => /^leads-\d{4}-\d{2}-\d{2}\.csv$/.test(f))
-        .sort()
-    : [];
-  const latest = files.at(-1);
+  const latest = latestLeadFile("leads");
   if (!latest)
     return console.warn(`No leads-DATE.csv in ${LEADS_DIR}, skipping the lead pipeline.`);
+  const source = latest.replace(".csv", "");
+
+  // Price lines per lead: insights osm_id is lead_id without the "osm:" prefix.
+  const openers = new Map<string, string[]>();
+  const insights = latestLeadFile("insights");
+  if (insights)
+    for (const r of readCsv(join(LEADS_DIR, insights))) {
+      if (!r["osm_id"] || !r["line"]) continue;
+      const id = `osm:${r["osm_id"]}`;
+      openers.set(id, [...(openers.get(id) ?? []), r["line"]]);
+    }
+
+  let n = 0;
   for (const r of readCsv(join(LEADS_DIR, latest))) {
-    // Same lead_id as truffle-leads/score.py: osm:<osm_id>, else addr:<postcode>-<number>.
-    const nr = (r["address"] ?? "").match(/(\d+\s*[a-zA-Z]?)\s*$/)?.[1]?.replace(/\s/g, "") ?? "";
-    const leadId = r["osm_id"] ? `osm:${r["osm_id"]}` : `addr:${r["postcode"]}-${nr}`;
-    const o = blank(
-      `lead:${leadId}`,
-      r["name"] || r["address"] || leadId,
-      "restaurant",
-      latest.replace(".csv", ""),
-    );
-    const signals = r["signals"] ?? "";
-    fill(o, {
-      category: nn(r["cuisine"]) ?? nn((r["type"] ?? "").replace(/_/g, " ")),
-      city: nn(r["municipality"]),
-      address: nn(r["address"]),
-      postcode: nn(r["postcode"]),
-      lat: r["lat"] ? Number(r["lat"]) : null,
-      lon: r["lon"] ? Number(r["lon"]) : null,
-      website: nn(r["website"]),
-      email: firstEmail(r["email"] ?? ""),
-      instagram: nn(r["instagram"]),
-      phone: nn(r["phone"]),
-      opened_year: Number(signals.match(/since (\d{4})/)?.[1]) || null,
-      pos_hint:
-        signals.match(/lightspeed|tebi|untill|mr\.? ?winston|qr ordering/gi)?.join(", ") ?? null,
-      hook: nn(signals),
-      notes: [
-        `Lead score ${r["score"]}.`,
-        r["permit_url"] && `Permit (${r["permit_stage"]}, ${r["permit_date"]}): ${r["permit_url"]}`,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-      tags: ["new-permit", r["type"] ?? ""].filter(Boolean),
-    });
-    if (o.email || o.instagram || o.phone) o.stage = "enriched";
+    if (!r["lead_id"]) continue;
+    if (!ALL_LEADS && !(LEAD_TYPES.has(r["type"] ?? "") && LEAD_STATUSES.has(r["status"] ?? "")))
+      continue;
+    const o = leadOrg(r, source, openers);
     orgs.set(o.external_ref, o);
+    n++;
   }
-  console.log(`Leads: ${latest}`);
+  const closed = ALL_LEADS ? latestLeadFile("leads-closed") : undefined;
+  if (closed)
+    for (const r of readCsv(join(LEADS_DIR, closed))) {
+      if (!r["lead_id"]) continue;
+      const o = leadOrg(r, closed.replace(".csv", ""), openers);
+      orgs.set(o.external_ref, o);
+      n++;
+    }
+  console.log(
+    `Leads: ${n} from ${latest}${closed ? ` and ${closed}` : ""}` +
+      `${insights ? `, price lines from ${insights}` : ""}${ALL_LEADS ? "" : " (open or unverified restaurants and cafes; --all-leads for the rest)"}`,
+  );
 }
 
 function importRestaurants() {
@@ -407,7 +463,11 @@ function importOutreach(types: Record<string, OrgType>) {
       .trim();
     const typeHint = Object.entries(types).find(([k]) => norm(name).includes(k))?.[1];
     const type = (prefix as OrgType | undefined) ?? undefined;
-    let o = findOrg(name, type ? { type } : {});
+    // Rows without a prefix went to suppliers: look there first, so a supplier isn't lost
+    // among the thousands of restaurant leads with similar names.
+    let o = type
+      ? findOrg(name, { type })
+      : (findOrg(name, { notType: "restaurant" }) ?? findOrg(name));
     if (!o) {
       o = blank(
         `outreach:${slug(name)}`,
@@ -690,7 +750,13 @@ console.log({
   organizations: orgs.size,
   byType: count((o) => o.type),
   byStage: count((o) => o.stage),
-  withoutLocation: [...orgs.values()].filter((o) => o.lat == null).map((o) => o.name),
+  withoutLocation: [...orgs.values()].filter((o) => o.lat == null).length,
+  withoutLocationSample: [...orgs.values()]
+    .filter((o) => o.lat == null)
+    .slice(0, 30)
+    .map((o) => o.name),
+  leadStatus: count((o) => o.tags.find((t) => t.startsWith("lead-")) ?? "not a pipeline lead"),
+  withPriceLines: [...orgs.values()].filter((o) => o.tags.includes("price-insight")).length,
   approxLocation: [...orgs.values()].filter((o) => o.tags.includes("approx-location")).length,
   contacts: contacts.size,
   interactions: interactions.size,

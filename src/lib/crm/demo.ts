@@ -110,6 +110,7 @@ export const DEMO_ORGS: Organization[] = [
     hook: "Opened 2025, specialty coffee, 1 site",
     pos_hint: "Tebi",
     opening_hours: "Tu-Su 09:00-16:00",
+    tags: ["lead-unverified", "cafe"],
   },
   {
     ...DEMO_BASE,
@@ -136,6 +137,9 @@ export const DEMO_ORGS: Organization[] = [
     lon: 4.365,
     website: "https://example.com",
     hook: "New permit Sept 2026",
+    pitch_angle:
+      "Cappuccino: €3,10 bij jullie. Bij 12 zaken binnen 1,5 km ligt de helft tussen €3,40 en €3,90 (mediaan €3,60).",
+    tags: ["lead-open", "restaurant", "price-insight"],
   },
   {
     ...DEMO_BASE,
