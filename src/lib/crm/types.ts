@@ -1,4 +1,4 @@
-// CRM table types, written by hand to match supabase/migrations/20261101090000_crm.sql.
+// CRM table types, written by hand to match the CRM migration (supabase/migrations/20261031212545_*.sql).
 // Once Lovable regenerates src/integrations/supabase/types.ts with these tables, this file
 // can import from there instead.
 

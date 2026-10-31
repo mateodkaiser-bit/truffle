@@ -36,7 +36,7 @@ Spotmapper: tap the map to log a visit, tick who was there, and the dot takes th
 
 - Data lives only in Supabase. Row level security lets a signed-in user read or write only when
   their email is in `crm_team`. Nothing CRM-related is ever committed here: this repo is public.
-- Schema: `supabase/migrations/20261101090000_crm.sql`.
+- Schema: `supabase/migrations/20261031212545_cac3e16e-cba9-4b0b-8172-160cb7716b53.sql` (applied by Lovable).
 - Add a team member (SQL editor): `insert into public.crm_team (email, name) values ('a@b.nl', 'Firstname');`
   The name is what shows on the @chips and the visit leaderboard. They then sign in on `/crm`
   with a password or a login link.
