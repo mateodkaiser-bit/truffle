@@ -583,20 +583,29 @@ async function geocode() {
     const city = o.city ? cityOf(o.city) : "";
     const key = `${o.name}|${o.address ?? ""}|${o.postcode ?? ""}|${city}`;
     if (!(key in cache)) {
+      // A failed request (timeout, 5xx) is not cached, so the next run tries again.
+      let failed = false;
+      const soft = <T>(p: Promise<T>) =>
+        p.catch(() => {
+          failed = true;
+          return null;
+        });
       let hit: [number, number, string] | null = null;
       if (o.address || o.postcode)
-        hit = await pdok([o.address, o.postcode, city].filter(Boolean).join(" "), "type:adres");
+        hit = await soft(
+          pdok([o.address, o.postcode, city].filter(Boolean).join(" "), "type:adres"),
+        );
       if (!hit && city) {
-        hit = await osmByName(o.name, city).catch(() => null);
+        hit = await soft(osmByName(o.name, city));
         await sleep(1100);
       }
       if (!hit && city) {
-        const c = await pdok(city, "type:woonplaats");
+        const c = await soft(pdok(city, "type:woonplaats"));
         hit = c && [c[0], c[1], "city"];
       }
-      cache[key] = hit;
+      if (!failed || hit) cache[key] = hit;
     }
-    const hit = cache[key];
+    const hit = cache[key] ?? null;
     if (hit) {
       o.lat = hit[0];
       o.lon = hit[1];
