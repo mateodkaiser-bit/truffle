@@ -9,7 +9,10 @@ import bundledWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url
 import { STAGE_META } from "@/lib/crm/stages";
 import { STAGES, type Organization } from "@/lib/crm/types";
 
-// PDOK BRT achtergrondkaart (Kadaster), free and keyless. The grey style lets the dots stand out.
+// Mapbox light when the Lovable Mapbox connector provides a token (as in Spotmapper); otherwise
+// the PDOK BRT achtergrondkaart (Kadaster), free and keyless, in grey so the dots stand out.
+const MAPBOX_TOKEN = import.meta.env["VITE_LOVABLE_CONNECTOR_MAPBOX_PUBLIC_TOKEN"] as
+  string | undefined;
 const PDOK_TILES =
   "https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/grijs/EPSG:3857/{z}/{x}/{y}.png";
 
@@ -40,6 +43,62 @@ function cardOffset(m: MlMap): [number, number] {
   return c.clientWidth < 768 ? [0, -c.clientHeight * 0.33] : [-208, 0];
 }
 
+type MapLib = typeof import("maplibre-gl");
+const view = {
+  center: [4.75, 52.1] as [number, number],
+  zoom: 7.3,
+  attributionControl: false as const,
+};
+
+/** Mapbox GL with the token, else MapLibre on PDOK. Their APIs match for what this map uses. */
+async function loadMap(): Promise<{ lib: MapLib; makeMap: (c: HTMLElement) => MlMap }> {
+  if (MAPBOX_TOKEN) {
+    const [{ default: mapboxgl }] = await Promise.all([
+      import("mapbox-gl"),
+      import("mapbox-gl/dist/mapbox-gl.css"),
+    ]);
+    mapboxgl.accessToken = MAPBOX_TOKEN;
+    const lib = mapboxgl as unknown as MapLib;
+    return {
+      lib,
+      makeMap: (container) =>
+        new mapboxgl.Map({
+          container,
+          style: "mapbox://styles/mapbox/light-v11",
+          projection: "mercator",
+          ...view,
+        }) as unknown as MlMap,
+    };
+  }
+  const maplibregl = await import("maplibre-gl");
+  maplibregl.setWorkerUrl(
+    import.meta.env.DEV
+      ? `https://cdn.jsdelivr.net/npm/maplibre-gl@${maplibregl.getVersion()}/dist/maplibre-gl-worker.mjs`
+      : bundledWorkerUrl,
+  );
+  return {
+    lib: maplibregl,
+    makeMap: (container) =>
+      new maplibregl.Map({
+        container,
+        style: {
+          version: 8,
+          sources: {
+            pdok: {
+              type: "raster",
+              tiles: [PDOK_TILES],
+              tileSize: 256,
+              maxzoom: 19,
+              attribution: "Kaartgegevens &copy; Kadaster",
+            },
+          },
+          layers: [{ id: "pdok", type: "raster", source: "pdok" }],
+        },
+        ...view,
+      }),
+  };
+}
+
 type Props = {
   orgs: Organization[];
   selectedId: string | null;
@@ -60,42 +119,20 @@ export function CrmMap({ orgs, selectedId, onSelect, onTapEmpty, draft }: Props)
 
   useEffect(() => {
     let cancelled = false;
-    void import("maplibre-gl").then((maplibregl) => {
+    void loadMap().then(({ lib, makeMap }) => {
       if (cancelled || !el.current) return;
-      maplibregl.setWorkerUrl(
-        import.meta.env.DEV
-          ? `https://cdn.jsdelivr.net/npm/maplibre-gl@${maplibregl.getVersion()}/dist/maplibre-gl-worker.mjs`
-          : bundledWorkerUrl,
-      );
-      const m = new maplibregl.Map({
-        container: el.current,
-        style: {
-          version: 8,
-          sources: {
-            pdok: {
-              type: "raster",
-              tiles: [PDOK_TILES],
-              tileSize: 256,
-              maxzoom: 19,
-              attribution: "Kaartgegevens &copy; Kadaster",
-            },
-          },
-          layers: [{ id: "pdok", type: "raster", source: "pdok" }],
-        },
-        center: [4.75, 52.1],
-        zoom: 7.3,
-        attributionControl: { compact: true },
-      });
+      const m = makeMap(el.current);
       map.current = m;
-      m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
-      const geo = new maplibregl.GeolocateControl({
+      m.addControl(new lib.AttributionControl({ compact: true }));
+      m.addControl(new lib.NavigationControl({ showCompass: false }), "bottom-right");
+      const geo = new lib.GeolocateControl({
         positionOptions: { enableHighAccuracy: true },
         trackUserLocation: true,
         fitBoundsOptions: { maxZoom: 16 },
       });
       m.addControl(geo, "bottom-right");
       makeMarker.current = (lat, lon) =>
-        new maplibregl.Marker({ color: "#1E1517" }).setLngLat([lon, lat]).addTo(m);
+        new lib.Marker({ color: "#1E1517" }).setLngLat([lon, lat]).addTo(m);
       m.on("load", () => {
         m.addSource("orgs", { type: "geojson", data: toGeoJson(latest.current.orgs) });
         m.addLayer({
