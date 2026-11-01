@@ -184,9 +184,21 @@ export function scoreOrg(
     sigWhy = "has a reason to fit";
   }
   // Pancake trial data: a verified owner-run restaurant, and how well we can reach the owner.
+  // Grade C (pancake-unconfirmed): no website or listing confirmed it is a restaurant.
+  const unconfirmed = o.tags.includes("pancake-unconfirmed");
   if (o.tags.includes("pancake") && !pipeline && !priority && signals < 6) {
-    signals = 6;
-    sigWhy = "owner-run restaurant verified by Pancake";
+    signals = unconfirmed ? 3 : 6;
+    sigWhy = unconfirmed
+      ? "owner found by Pancake, restaurant not confirmed"
+      : "owner-run restaurant verified by Pancake";
+  }
+  if (o.tags.includes("site-down")) {
+    signals -= 3;
+    sigWhy += ", website down (may have closed)";
+  }
+  if (o.tags.includes("horeca-influencer")) {
+    signals += 2;
+    sigWhy += ", horeca voice on LinkedIn";
   }
   if (o.tags.includes("owner-known")) {
     signals += 3;

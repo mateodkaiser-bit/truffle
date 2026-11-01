@@ -625,13 +625,19 @@ function importPancake() {
     fill(o, {
       owner_name: nn(r["name"]),
       hook: nn(r["signal"]),
+      opened_year: Number(r["opened"]) || null,
       tags: [
         "pancake",
         "owner-known",
         ownDomain ? "owner-email" : "",
         r["signal"] ? "linkedin-engaged" : "",
+        r["influencer"] ? "horeca-influencer" : "",
+        r["grade"] ? `pancake-grade-${r["grade"].toLowerCase()}` : "",
+        r["grade"] === "C" ? "pancake-unconfirmed" : "",
+        r["site"] === "down" ? "site-down" : "",
       ].filter(Boolean),
     });
+    if (r["note"] && !o.notes?.includes(r["note"])) addNote(o, `Pancake: ${r["note"]}`);
     addContact(o, {
       name: r["name"],
       role: r["title"],

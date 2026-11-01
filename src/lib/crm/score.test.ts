@@ -70,6 +70,18 @@ describe("lead score", () => {
     expect(sig(["pancake", "owner-known", "owner-email"]).reason).toContain("owner's own email");
   });
 
+  it("ranks unconfirmed or dead-site Pancake leads below confirmed ones", () => {
+    const model = learnFromHistory([], new Map());
+    const sig = (tags: string[]) =>
+      scoreOrg(org({ tags }), undefined, model, now).parts.find((p) => p.key === "signals")!;
+    const confirmed = sig(["pancake", "owner-known"]).value;
+    const unconfirmed = sig(["pancake", "pancake-unconfirmed", "owner-known"]);
+    expect(unconfirmed.value).toBe(6);
+    expect(unconfirmed.value).toBeLessThan(confirmed);
+    expect(unconfirmed.reason).toContain("not confirmed");
+    expect(sig(["pancake", "pancake-unconfirmed", "site-down", "owner-known"]).value).toBe(3);
+  });
+
   it("counts a visit as a conversation", () => {
     const model = learnFromHistory([], new Map());
     const o = org({ stage: "responded" });
