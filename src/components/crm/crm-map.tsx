@@ -6,7 +6,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 // The build bundles the worker itself; the dev server injects its client into worker files,
 // so dev loads the same version from jsDelivr instead.
 import bundledWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-import { STAGE_META } from "@/lib/crm/stages";
+import { STAGE_META, VISITED_COLOR } from "@/lib/crm/stages";
 import { STAGES, type Organization } from "@/lib/crm/types";
 
 // Mapbox light when the Lovable Mapbox connector provides a token (as in Spotmapper); otherwise
@@ -23,7 +23,7 @@ const stageColor = [
   "#888",
 ];
 
-function toGeoJson(orgs: Organization[]): FeatureCollection {
+function toGeoJson(orgs: Organization[], visited: Set<string>): FeatureCollection {
   return {
     type: "FeatureCollection",
     features: orgs
@@ -32,7 +32,7 @@ function toGeoJson(orgs: Organization[]): FeatureCollection {
         type: "Feature",
         id: o.id,
         geometry: { type: "Point", coordinates: [o.lon!, o.lat!] },
-        properties: { id: o.id, stage: o.stage, name: o.name },
+        properties: { id: o.id, stage: o.stage, name: o.name, visited: visited.has(o.id) },
       })),
   };
 }
@@ -106,16 +106,27 @@ type Props = {
   /** Tap away from any dot. `close` is true at street level, where a tap means "log a place here". */
   onTapEmpty: (lat: number, lon: number, close: boolean) => void;
   draft: { lat: number; lon: number } | null;
+  visited: Set<string>;
+  /** Called with the user's position each time the locate button finds it. */
+  onLocate: (lat: number, lon: number) => void;
 };
 
-export function CrmMap({ orgs, selectedId, onSelect, onTapEmpty, draft }: Props) {
+export function CrmMap({
+  orgs,
+  selectedId,
+  onSelect,
+  onTapEmpty,
+  draft,
+  visited,
+  onLocate,
+}: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
   const draftMarker = useRef<Marker | null>(null);
   const makeMarker = useRef<((lat: number, lon: number) => Marker) | null>(null);
   const ready = useRef(false);
-  const latest = useRef({ orgs, selectedId, onSelect, onTapEmpty });
-  latest.current = { orgs, selectedId, onSelect, onTapEmpty };
+  const latest = useRef({ orgs, selectedId, onSelect, onTapEmpty, visited, onLocate });
+  latest.current = { orgs, selectedId, onSelect, onTapEmpty, visited, onLocate };
 
   useEffect(() => {
     let cancelled = false;
@@ -131,10 +142,16 @@ export function CrmMap({ orgs, selectedId, onSelect, onTapEmpty, draft }: Props)
         fitBoundsOptions: { maxZoom: 16 },
       });
       m.addControl(geo, "bottom-right");
+      geo.on("geolocate", (e: { coords: GeolocationCoordinates }) =>
+        latest.current.onLocate(e.coords.latitude, e.coords.longitude),
+      );
       makeMarker.current = (lat, lon) =>
         new lib.Marker({ color: "#1E1517" }).setLngLat([lon, lat]).addTo(m);
       m.on("load", () => {
-        m.addSource("orgs", { type: "geojson", data: toGeoJson(latest.current.orgs) });
+        m.addSource("orgs", {
+          type: "geojson",
+          data: toGeoJson(latest.current.orgs, latest.current.visited),
+        });
         m.addLayer({
           id: "orgs-selected",
           type: "circle",
@@ -147,11 +164,29 @@ export function CrmMap({ orgs, selectedId, onSelect, onTapEmpty, draft }: Props)
           type: "circle",
           source: "orgs",
           paint: {
-            "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 3.5, 11, 6, 15, 9],
+            "circle-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              6,
+              ["case", ["get", "visited"], 5, 3.5],
+              11,
+              ["case", ["get", "visited"], 8, 6],
+              15,
+              ["case", ["get", "visited"], 11, 9],
+            ],
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             "circle-color": stageColor as any,
-            "circle-stroke-color": "#ffffff",
-            "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 6, 0.5, 12, 1.5],
+            "circle-stroke-color": ["case", ["get", "visited"], VISITED_COLOR, "#ffffff"],
+            "circle-stroke-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              6,
+              ["case", ["get", "visited"], 2, 0.5],
+              12,
+              ["case", ["get", "visited"], 3.5, 1.5],
+            ],
           },
         });
         // Like Spotmapper: open on the user's position when location is already allowed.
@@ -184,8 +219,8 @@ export function CrmMap({ orgs, selectedId, onSelect, onTapEmpty, draft }: Props)
 
   useEffect(() => {
     if (!ready.current || !map.current) return;
-    (map.current.getSource("orgs") as GeoJSONSource | undefined)?.setData(toGeoJson(orgs));
-  }, [orgs]);
+    (map.current.getSource("orgs") as GeoJSONSource | undefined)?.setData(toGeoJson(orgs, visited));
+  }, [orgs, visited]);
 
   useEffect(() => {
     const m = map.current;
@@ -214,7 +249,8 @@ export function CrmMap({ orgs, selectedId, onSelect, onTapEmpty, draft }: Props)
   }, [draft]);
 
   return (
-    <div className="absolute inset-0">
+    // Bigger buttons for thumbs; the locate button sits clear of the bottom bar.
+    <div className="absolute inset-0 [&_.mapboxgl-ctrl-bottom-right]:mb-[calc(env(safe-area-inset-bottom)+8.5rem)] [&_.maplibregl-ctrl-bottom-right]:mb-[calc(env(safe-area-inset-bottom)+8.5rem)] [&_.mapboxgl-ctrl-group_button]:size-11 [&_.maplibregl-ctrl-group_button]:size-11">
       <div ref={el} className="h-full w-full" />
     </div>
   );

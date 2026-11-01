@@ -7,6 +7,8 @@ export type CrmFilters = {
   tag: string;
   q: string;
   dueOnly: boolean;
+  /** Only places the team visited in person. */
+  visitedOnly: boolean;
   /** Lead pipeline statuses to hide; organisations that are not pipeline leads always show. */
   hiddenLeadStatus: LeadStatus[];
 };
@@ -33,6 +35,7 @@ export const DEFAULT_FILTERS: CrmFilters = {
   tag: "",
   q: "",
   dueOnly: false,
+  visitedOnly: false,
   hiddenLeadStatus: ["check", "likely-closed"],
 };
 
@@ -48,7 +51,13 @@ export function todayIso(now = new Date()) {
 }
 
 /** Everything except the stage filter, so the legend can count per stage. */
-export function matchesBase(o: Organization, f: CrmFilters, today = todayIso()) {
+export function matchesBase(
+  o: Organization,
+  f: CrmFilters,
+  today = todayIso(),
+  visited?: Set<string>,
+) {
+  if (f.visitedOnly && !visited?.has(o.id)) return false;
   if (f.types.length && !f.types.includes(o.type)) return false;
   if (f.city && norm(o.city) !== norm(f.city)) return false;
   if (f.tag && !o.tags.includes(f.tag)) return false;
@@ -69,13 +78,23 @@ export function matchesBase(o: Organization, f: CrmFilters, today = todayIso()) 
   return true;
 }
 
-export function applyFilters(orgs: Organization[], f: CrmFilters, today = todayIso()) {
-  return orgs.filter((o) => f.stages.includes(o.stage) && matchesBase(o, f, today));
+export function applyFilters(
+  orgs: Organization[],
+  f: CrmFilters,
+  today = todayIso(),
+  visited?: Set<string>,
+) {
+  return orgs.filter((o) => f.stages.includes(o.stage) && matchesBase(o, f, today, visited));
 }
 
-export function countByStage(orgs: Organization[], f: CrmFilters, today = todayIso()) {
+export function countByStage(
+  orgs: Organization[],
+  f: CrmFilters,
+  today = todayIso(),
+  visited?: Set<string>,
+) {
   const counts = Object.fromEntries(STAGES.map((s) => [s, 0])) as Record<Stage, number>;
-  for (const o of orgs) if (matchesBase(o, f, today)) counts[o.stage]++;
+  for (const o of orgs) if (matchesBase(o, f, today, visited)) counts[o.stage]++;
   return counts;
 }
 

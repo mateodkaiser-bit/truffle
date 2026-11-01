@@ -24,7 +24,28 @@ export async function nearbyPlaces(
   lon: number,
   signal?: AbortSignal,
 ): Promise<NearbyPlace[]> {
-  const q = `[out:json][timeout:10];(nwr(around:80,${lat},${lon})["amenity"~"^(${AMENITIES})$"]["name"];nwr(around:80,${lat},${lon})["shop"~"^(bakery|butcher|deli|coffee|cheese|seafood|wine)$"]["name"];);out center 20;`;
+  const q = `[out:json][timeout:10];(nwr(around:120,${lat},${lon})["amenity"~"^(${AMENITIES})$"]["name"];nwr(around:120,${lat},${lon})["shop"~"^(bakery|butcher|deli|coffee|cheese|seafood|wine)$"]["name"];);out center 20;`;
+  return overpass(q, lat, lon, signal);
+}
+
+/** Food and drink places within 1.5 km whose name contains the text, nearest first. */
+export async function searchPlacesByName(
+  text: string,
+  lat: number,
+  lon: number,
+  signal?: AbortSignal,
+): Promise<NearbyPlace[]> {
+  const re = text.trim().replace(/[\\^$.*+?()[\]{}|"]/g, "\\\\$&");
+  const q = `[out:json][timeout:10];(nwr(around:1500,${lat},${lon})["amenity"~"^(${AMENITIES})$"]["name"~"${re}",i];nwr(around:1500,${lat},${lon})["shop"]["name"~"${re}",i];);out center 15;`;
+  return overpass(q, lat, lon, signal);
+}
+
+async function overpass(
+  q: string,
+  lat: number,
+  lon: number,
+  signal?: AbortSignal,
+): Promise<NearbyPlace[]> {
   const res = await fetch("https://overpass-api.de/api/interpreter", {
     method: "POST",
     body: new URLSearchParams({ data: q }),

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { DEMO_BASE, DEMO_CONTACTS, DEMO_INTERACTIONS, DEMO_ORGS } from "./demo";
+import type { OrgActivity } from "./score";
 import type { Contact, CrmDatabase, Interaction, Organization, Stage } from "./types";
 
 // The generated Database type does not know the CRM tables until Lovable regenerates it.
@@ -139,6 +140,7 @@ export function useLogInteraction() {
       qc.invalidateQueries({ queryKey: ["crm", "orgs"] });
       qc.invalidateQueries({ queryKey: ["crm", "detail", org.id] });
       qc.invalidateQueries({ queryKey: ["crm", "leaderboard"] });
+      qc.invalidateQueries({ queryKey: ["crm", "activity"] });
     },
   });
 }
@@ -175,6 +177,41 @@ export function useTeam(enabled: boolean) {
 }
 
 /** Visits per person, most first (Spotmapper's leaderboard). */
+/** Visits and messages per organisation, for the visited marker and the lead score. */
+export function useActivity(enabled: boolean) {
+  return useQuery({
+    queryKey: ["crm", "activity"],
+    enabled,
+    staleTime: 60_000,
+    queryFn: async (): Promise<Map<string, OrgActivity>> => {
+      type Row = Pick<Interaction, "org_id" | "channel" | "direction" | "date">;
+      let rows: Row[] = [];
+      if (demo) rows = demoStore.interactions;
+      else {
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await db
+            .from("interactions")
+            .select("org_id, channel, direction, date")
+            .range(from, from + 999);
+          if (error) throw error;
+          rows = rows.concat(data ?? []);
+          if (!data || data.length < 1000) break;
+        }
+      }
+      const out = new Map<string, OrgActivity>();
+      for (const r of rows) {
+        const a = out.get(r.org_id) ?? { visits: 0, inbound: 0, outbound: 0, last: null };
+        if (r.channel === "visit") a.visits++;
+        else if (r.direction === "in") a.inbound++;
+        else a.outbound++;
+        if (!a.last || r.date > a.last) a.last = r.date;
+        out.set(r.org_id, a);
+      }
+      return out;
+    },
+  });
+}
+
 export function useLeaderboard(enabled: boolean) {
   return useQuery({
     queryKey: ["crm", "leaderboard"],

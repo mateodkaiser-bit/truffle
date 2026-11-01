@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { lastPeople, rememberPeople } from "@/lib/crm/people";
 import { PeopleChips } from "./new-place";
+import { ScoreDonut } from "./score-donut";
+import type { OrgScore } from "@/lib/crm/score";
 import { useLogInteraction, useOrgDetail, useUpdateOrg, type OrgPatch } from "@/lib/crm/api";
 import { todayIso } from "@/lib/crm/filters";
 import { CHANNEL_LABEL, STAGE_META, TYPE_LABEL } from "@/lib/crm/stages";
@@ -57,7 +59,7 @@ export function StageDot({ stage }: { stage: Stage }) {
   );
 }
 
-export function OrgCard({ org }: { org: Organization }) {
+export function OrgCard({ org, score }: { org: Organization; score?: OrgScore | undefined }) {
   const detail = useOrgDetail(org.id);
   const update = useUpdateOrg();
   const [logOpen, setLogOpen] = useState(false);
@@ -96,6 +98,8 @@ export function OrgCard({ org }: { org: Organization }) {
           </div>
         )}
       </div>
+
+      {score && <ScoreDonut score={score} />}
 
       <div className="flex items-center gap-2">
         <StageDot stage={org.stage} />

@@ -170,6 +170,22 @@ export const DEMO_CONTACTS: Contact[] = [
 
 export const DEMO_INTERACTIONS: Interaction[] = [
   {
+    id: "i0",
+    org_id: "d7",
+    contact_id: null,
+    channel: "visit",
+    direction: "out",
+    date: "2026-10-30",
+    subject: null,
+    summary: "Spoke to the owner at the bar, wants an email with details",
+    next_step: null,
+    next_step_due: null,
+    people: ["Alex", "Sam"],
+    external_ref: null,
+    created_by: null,
+    created_at: DEMO_BASE.created_at,
+  },
+  {
     id: "i1",
     org_id: "d2",
     contact_id: null,

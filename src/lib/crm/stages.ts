@@ -29,3 +29,6 @@ export const CHANNEL_LABEL: Record<Channel, string> = {
   meeting: "Meeting",
   form: "Form",
 };
+
+/** Ring colour for places the team visited in person, on the map and in the legend. */
+export const VISITED_COLOR = "#E0218A";

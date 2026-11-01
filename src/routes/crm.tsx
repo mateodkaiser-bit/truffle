@@ -1,7 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import type { Session } from "@supabase/supabase-js";
-import { List, LogOut, Map as MapIcon, SlidersHorizontal, Trophy, X } from "lucide-react";
+import {
+  List,
+  LogOut,
+  Map as MapIcon,
+  MapPinPlus,
+  SlidersHorizontal,
+  Trophy,
+  X,
+} from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,9 +19,11 @@ import {
   joinWithSecret,
   isDemoMode,
   setDemoMode,
+  useActivity,
   useLeaderboard,
   useOrgs,
 } from "@/lib/crm/api";
+import { learnFromHistory, scoreOrg } from "@/lib/crm/score";
 import {
   applyFilters,
   countByStage,
@@ -23,7 +34,7 @@ import {
   type CrmFilters,
   type LeadStatus,
 } from "@/lib/crm/filters";
-import { STAGE_META, TYPE_LABEL } from "@/lib/crm/stages";
+import { STAGE_META, TYPE_LABEL, VISITED_COLOR } from "@/lib/crm/stages";
 import { ORG_TYPES, STAGES, type OrgType, type Organization } from "@/lib/crm/types";
 import { CrmLogin } from "@/components/crm/crm-login";
 import { OrgCard } from "@/components/crm/org-card";
@@ -133,10 +144,27 @@ function Crm() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ lat: number; lon: number } | null>(null);
   const [panel, setPanel] = useState<"filters" | "board" | null>(null);
+  const [locating, setLocating] = useState(false);
+  const me = useRef<{ lat: number; lon: number } | null>(null);
 
-  const filtered = useMemo(() => applyFilters(orgs, filters), [orgs, filters]);
-  const counts = useMemo(() => countByStage(orgs, filters), [orgs, filters]);
+  const activityQ = useActivity(true);
+  const activity = useMemo(() => activityQ.data ?? new Map(), [activityQ.data]);
+  const visited = useMemo(
+    () => new Set([...activity].filter(([, a]) => a.visits > 0).map(([id]) => id)),
+    [activity],
+  );
+  const model = useMemo(() => learnFromHistory(orgs, activity), [orgs, activity]);
+
+  const filtered = useMemo(
+    () => applyFilters(orgs, filters, undefined, visited),
+    [orgs, filters, visited],
+  );
+  const counts = useMemo(
+    () => countByStage(orgs, filters, undefined, visited),
+    [orgs, filters, visited],
+  );
   const selected = orgs.find((o) => o.id === selectedId) ?? null;
+  const selectedScore = selected ? scoreOrg(selected, activity.get(selected.id), model) : undefined;
   const cities = useMemo(() => uniqueSorted(orgs.map((o) => o.city)), [orgs]);
   const tags = useMemo(() => uniqueSorted(orgs.flatMap((o) => o.tags)), [orgs]);
   const set = (patch: Partial<CrmFilters>) => setFilters((f) => ({ ...f, ...patch }));
@@ -145,6 +173,7 @@ function Crm() {
     (filters.city ? 1 : 0) +
     (filters.tag ? 1 : 0) +
     (filters.dueOnly ? 1 : 0) +
+    (filters.visitedOnly ? 1 : 0) +
     (filters.hiddenLeadStatus.join() === DEFAULT_FILTERS.hiddenLeadStatus.join() ? 0 : 1);
   const leadCounts = useMemo(() => {
     const c: Partial<Record<LeadStatus, number>> = {};
@@ -160,6 +189,27 @@ function Crm() {
     setSelectedId(id);
   };
 
+  // "I'm standing at a place": use the last position from the locate button, or ask for one.
+  const logHere = () => {
+    setSelectedId(null);
+    setPanel(null);
+    if (me.current) return setDraft({ ...me.current });
+    if (!navigator.geolocation) return toast.error("Location is not available on this device.");
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setLocating(false);
+        me.current = { lat: p.coords.latitude, lon: p.coords.longitude };
+        setDraft({ ...me.current });
+      },
+      () => {
+        setLocating(false);
+        toast.error("Allow location to log where you are, or zoom in and tap the map.");
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
   return (
     <main className="fixed inset-0 overflow-hidden bg-background">
       <Toaster position="top-center" />
@@ -169,6 +219,8 @@ function Crm() {
           selectedId={selectedId}
           onSelect={select}
           draft={draft}
+          visited={visited}
+          onLocate={(lat, lon) => (me.current = { lat, lon })}
           onTapEmpty={(lat, lon, close) => {
             setSelectedId(null);
             setPanel(null);
@@ -193,13 +245,10 @@ function Crm() {
             onClick={() => setPanel((p) => (p === "filters" ? null : "filters"))}
           >
             <SlidersHorizontal />
-            {activeFilters > 0 && <span className="text-xs">{activeFilters}</span>}
-          </IconButton>
-          <IconButton
-            label={view === "map" ? "List view" : "Map view"}
-            onClick={() => setView((v) => (v === "map" ? "list" : "map"))}
-          >
-            {view === "map" ? <List /> : <MapIcon />}
+            <span className="hidden text-sm sm:inline">Filters</span>
+            {activeFilters > 0 && (
+              <span className="rounded-full bg-paper px-1.5 text-xs text-ink">{activeFilters}</span>
+            )}
           </IconButton>
           <IconButton
             label="Leaderboard"
@@ -227,41 +276,92 @@ function Crm() {
         {panel === "board" && <Leaderboard />}
       </div>
 
-      {/* Legend: tap a stage to hide or show it */}
+      {/* Bottom: legend (tap to hide or show), map/list switch and "log a visit here" */}
       {!selected && !draft && (
-        <div className="absolute bottom-0 left-0 z-20 max-w-[calc(100%-4rem)] p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
-          <div className={`${glass} flex flex-wrap gap-1 rounded-2xl p-2 text-xs`}>
-            {STAGES.map((s) => {
-              const on = filters.stages.includes(s);
-              return (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 space-y-2 p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
+          {view === "map" && (
+            <div
+              className={`${glass} pointer-events-auto flex gap-1 overflow-x-auto rounded-2xl p-1.5 text-xs [scrollbar-width:none] md:max-w-[calc(100%-4rem)] md:flex-wrap md:overflow-visible`}
+            >
+              <button
+                type="button"
+                aria-pressed={filters.visitedOnly}
+                onClick={() => set({ visitedOnly: !filters.visitedOnly })}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 font-medium ${filters.visitedOnly ? "bg-ink text-paper" : ""}`}
+              >
+                <span
+                  className="inline-block size-3 rounded-full border-[3px] bg-background"
+                  style={{ borderColor: VISITED_COLOR }}
+                />
+                Visited
+                <span className="opacity-60">{visited.size}</span>
+              </button>
+              <span className="my-1 w-px shrink-0 bg-border" />
+              {STAGES.map((s) => {
+                const on = filters.stages.includes(s);
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() =>
+                      set({
+                        stages: on ? filters.stages.filter((x) => x !== s) : [...filters.stages, s],
+                      })
+                    }
+                    className={`flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1.5 ${on ? "" : "line-through opacity-40"}`}
+                  >
+                    <span
+                      className="inline-block size-2.5 rounded-full"
+                      style={{ background: STAGE_META[s].color }}
+                    />
+                    {STAGE_META[s].label}
+                    <span className="text-muted-foreground">{counts[s]}</span>
+                  </button>
+                );
+              })}
+              {isDemoMode() && (
+                <span className="shrink-0 px-2 py-1.5 font-semibold text-ember">Demo data</span>
+              )}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <div className={`${glass} pointer-events-auto flex rounded-full p-1`} role="tablist">
+              {(
+                [
+                  ["map", "Map", <MapIcon key="m" />],
+                  ["list", "List", <List key="l" />],
+                ] as const
+              ).map(([v, text, icon]) => (
                 <button
-                  key={s}
+                  key={v}
                   type="button"
-                  aria-pressed={on}
-                  onClick={() =>
-                    set({
-                      stages: on ? filters.stages.filter((x) => x !== s) : [...filters.stages, s],
-                    })
-                  }
-                  className={`flex items-center gap-1.5 rounded-full px-2 py-1 ${on ? "" : "opacity-40"}`}
+                  role="tab"
+                  aria-selected={view === v}
+                  onClick={() => setView(v)}
+                  className={`flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-medium [&_svg]:size-4 ${view === v ? "bg-ink text-paper" : ""}`}
                 >
-                  <span
-                    className="inline-block size-2.5 rounded-full"
-                    style={{ background: STAGE_META[s].color }}
-                  />
-                  {STAGE_META[s].label}
-                  <span className="text-muted-foreground">{counts[s]}</span>
+                  {icon}
+                  {text}
                 </button>
-              );
-            })}
-            {isDemoMode() && <span className="px-2 py-1 font-semibold text-ember">Demo data</span>}
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={logHere}
+              disabled={locating}
+              className="pointer-events-auto flex h-12 items-center gap-2 rounded-full bg-plum px-4 text-sm font-semibold text-paper shadow-soft disabled:opacity-60 [&_svg]:size-5"
+            >
+              <MapPinPlus />
+              {locating ? "Finding you…" : "Log a visit here"}
+            </button>
           </div>
         </div>
       )}
 
       {(selected || draft) && (
         <SidePanel onClose={() => (setSelectedId(null), setDraft(null))}>
-          {selected && <OrgCard key={selected.id} org={selected} />}
+          {selected && <OrgCard key={selected.id} org={selected} score={selectedScore} />}
           {draft && !selected && (
             <NewPlace
               key={`${draft.lat},${draft.lon}`}
