@@ -20,6 +20,7 @@ import {
   isDemoMode,
   setDemoMode,
   useActivity,
+  useCounts,
   useLeaderboard,
   useOrgs,
 } from "@/lib/crm/api";
@@ -350,7 +351,7 @@ function Crm() {
             onReset={() => setFilters(DEFAULT_FILTERS)}
           />
         )}
-        {panel === "board" && <Leaderboard />}
+        {panel === "board" && <Leaderboard orgs={orgs} visited={visited.size} />}
       </div>
 
       {/* Bottom: legend, tap an entry to hide or show it */}
@@ -703,10 +704,32 @@ function FilterPanel({
   );
 }
 
-function Leaderboard() {
+/** Team headline numbers, then who has done the most visits. */
+function Leaderboard({ orgs, visited }: { orgs: Organization[]; visited: number }) {
   const board = useLeaderboard(true).data ?? [];
+  const counts = useCounts(true).data;
+  const talking = orgs.filter((o) =>
+    ["responded", "in_conversation", "pilot_partner"].includes(o.stage),
+  ).length;
+  // Every place, person and logged visit, call or email the team has gathered.
+  const dataPoints = counts ? orgs.length + counts.contacts + counts.interactions : null;
+  const stats: [string, number | null][] = [
+    ["Data points collected", dataPoints],
+    ["Places visited", visited],
+    ["Places talking to us", talking],
+  ];
   return (
-    <div className={`${glass} pointer-events-auto w-60 self-end rounded-2xl p-4`}>
+    <div className={`${glass} pointer-events-auto w-64 self-end rounded-2xl p-4`}>
+      <div className="mb-3 space-y-2 border-b pb-3">
+        {stats.map(([label, n], i) => (
+          <div key={label} className="flex items-baseline justify-between gap-3">
+            <span className="text-sm text-muted-foreground">{label}</span>
+            <span className={`font-display ${i === 0 ? "text-2xl" : "text-lg"}`}>
+              {n == null ? "…" : n.toLocaleString("nl-NL")}
+            </span>
+          </div>
+        ))}
+      </div>
       <div className="mb-3 font-display text-base">Visits</div>
       {board.length === 0 && <p className="text-sm text-muted-foreground">No visits logged yet.</p>}
       <ol className="space-y-2">

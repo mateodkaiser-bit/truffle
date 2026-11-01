@@ -141,6 +141,7 @@ export function useLogInteraction() {
       qc.invalidateQueries({ queryKey: ["crm", "detail", org.id] });
       qc.invalidateQueries({ queryKey: ["crm", "leaderboard"] });
       qc.invalidateQueries({ queryKey: ["crm", "activity"] });
+      qc.invalidateQueries({ queryKey: ["crm", "counts"] });
     },
   });
 }
@@ -208,6 +209,25 @@ export function useActivity(enabled: boolean) {
         out.set(r.org_id, a);
       }
       return out;
+    },
+  });
+}
+
+/** Row counts for the team headline: contacts and logged interactions. */
+export function useCounts(enabled: boolean) {
+  return useQuery({
+    queryKey: ["crm", "counts"],
+    enabled,
+    queryFn: async (): Promise<{ contacts: number; interactions: number }> => {
+      if (demo)
+        return { contacts: demoStore.contacts.length, interactions: demoStore.interactions.length };
+      const [c, i] = await Promise.all([
+        db.from("contacts").select("id", { count: "exact", head: true }),
+        db.from("interactions").select("id", { count: "exact", head: true }),
+      ]);
+      if (c.error) throw c.error;
+      if (i.error) throw i.error;
+      return { contacts: c.count ?? 0, interactions: i.count ?? 0 };
     },
   });
 }
