@@ -25,7 +25,7 @@ export function CrmLogin() {
     setError("");
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/crm`, shouldCreateUser: false },
+      options: { emailRedirectTo: `${window.location.origin}/crm`, shouldCreateUser: true },
     });
     if (error) {
       setState("idle");

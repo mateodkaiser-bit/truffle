@@ -1,7 +1,7 @@
 // Import CRM data from local lead files into Supabase. Run locally with Bun; see README "CRM import".
 //
 //   bun scripts/crm-import.ts --dry-run                  # build everything, print a summary, write nothing
-//   TRUFFLE_CRM_EMAIL=... TRUFFLE_CRM_PASSWORD=... bun scripts/crm-import.ts
+//   bun scripts/crm-import.ts                            # asks your team email, signs in by emailed link
 //   ... --all-leads                                        # every pipeline lead, not only open restaurants
 //
 // The data files stay outside this public repo. Nothing from ~/truffle-pilots/raw or any invoice
@@ -11,6 +11,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { createInterface } from "node:readline";
 import { createClient } from "@supabase/supabase-js";
 import type {
   Channel,
@@ -681,18 +682,76 @@ async function geocode() {
 
 // ---------- write ----------
 
+/**
+ * Password from TRUFFLE_CRM_PASSWORD if set, otherwise an emailed login link: the link lands on a
+ * small server on this machine (or you paste the address it opened), and the code is exchanged here.
+ */
+async function signIn(sb: ReturnType<typeof createClient>) {
+  const email = (env("TRUFFLE_CRM_EMAIL") || prompt("Your team email:") || "").trim().toLowerCase();
+  if (!email) throw new Error("No email given.");
+  const password = env("TRUFFLE_CRM_PASSWORD");
+  if (password) {
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return;
+  }
+  const port = Number(env("CRM_LOGIN_PORT", "8789"));
+  let fromServer: (code: string) => void = () => {};
+  const served = new Promise<string>((r) => (fromServer = r));
+  const server = Bun.serve({
+    port,
+    fetch(req) {
+      const code = new URL(req.url).searchParams.get("code");
+      if (!code) return new Response("No login code in this link.", { status: 400 });
+      fromServer(code);
+      return new Response("Signed in. Close this tab and go back to the terminal.");
+    },
+  });
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: `http://localhost:${port}/`, shouldCreateUser: true },
+  });
+  if (error) throw error;
+  console.log(
+    `Login link sent to ${email}. Open it on this Mac.\n` +
+      "If it opens the Truffle site instead of a 'Signed in' page, copy the full address from the " +
+      "address bar and paste it here.",
+  );
+  const rl = createInterface({ input: process.stdin });
+  const pasted = new Promise<string>((r) =>
+    rl.on("line", (line) => {
+      const code = line.match(/[?&]code=([^&#\s]+)/)?.[1];
+      if (code) r(decodeURIComponent(code));
+      else console.log("No code in that address; paste the whole URL.");
+    }),
+  );
+  const code = await Promise.race([served, pasted]);
+  rl.close();
+  await server.stop();
+  const { error: exchangeError } = await sb.auth.exchangeCodeForSession(code);
+  if (exchangeError) throw exchangeError;
+}
+
 async function write() {
   const url = env("VITE_SUPABASE_URL") || env("SUPABASE_URL");
   const key = env("VITE_SUPABASE_PUBLISHABLE_KEY") || env("SUPABASE_PUBLISHABLE_KEY");
-  const email = env("TRUFFLE_CRM_EMAIL");
-  const password = env("TRUFFLE_CRM_PASSWORD");
   if (!url || !key)
     throw new Error("Run from ~/truffle so Bun loads .env (Supabase URL and publishable key).");
-  if (!email || !password)
-    throw new Error("Set TRUFFLE_CRM_EMAIL and TRUFFLE_CRM_PASSWORD (a crm_team member).");
-  const sb = createClient(url, key, { auth: { persistSession: false } });
-  const { error: authError } = await sb.auth.signInWithPassword({ email, password });
-  if (authError) throw authError;
+  const memory = new Map<string, string>();
+  const sb = createClient(url, key, {
+    auth: {
+      flowType: "pkce",
+      autoRefreshToken: false,
+      storage: {
+        getItem: (k) => memory.get(k) ?? null,
+        setItem: (k, v) => void memory.set(k, v),
+        removeItem: (k) => void memory.delete(k),
+      },
+    },
+  });
+  await signIn(sb);
+  const { data: member } = await sb.rpc("is_crm_member");
+  if (member !== true) throw new Error("Signed in, but this email is not on the crm_team list.");
 
   const upsert = async (table: string, rows: object[]) => {
     for (let i = 0; i < rows.length; i += 200) {

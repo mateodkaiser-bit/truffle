@@ -54,10 +54,13 @@ team member. It never reads pilot invoice data or anything in `~/truffle-pilots/
 cd ~/truffle
 # 1. Check what would be imported (writes nothing)
 CRM_SPOTMAPPER_CSV=~/Downloads/visits-export-....csv bun scripts/crm-import.ts --dry-run
-# 2. Import
-CRM_SPOTMAPPER_CSV=~/Downloads/visits-export-....csv \
-  TRUFFLE_CRM_EMAIL=you@example.com TRUFFLE_CRM_PASSWORD=... bun scripts/crm-import.ts
+# 2. Import: asks for your team email and emails you a login link; open it on the same Mac
+CRM_SPOTMAPPER_CSV=~/Downloads/visits-export-....csv bun scripts/crm-import.ts
 ```
+
+The link should open a "Signed in" page on `localhost:8789`. If the auth settings don't allow that
+redirect, it opens the Truffle site instead: paste that full address into the terminal and the
+import carries on.
 
 Sources, all outside this repo: the supplier, accountant and restaurant lead CSVs, the outreach
 log and a hand-written overrides file (replies, promises, pilots) in
