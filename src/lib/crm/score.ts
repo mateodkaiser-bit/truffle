@@ -240,7 +240,7 @@ export function scoreOrg(
       label: "Conversation",
       value: clamp(conv, 50),
       max: 50,
-      color: "#3E7B4F",
+      color: "#2F6B3F",
       reason: convWhy.join(", "),
     },
     {
@@ -272,7 +272,7 @@ export function scoreOrg(
       label: "Timing",
       value: clamp(timing, 10),
       max: 10,
-      color: "#4C9A8A",
+      color: "#2F8C9B",
       reason: timeWhy.join(", ") || "opening year unknown",
     },
   ];

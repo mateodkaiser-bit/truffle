@@ -5,8 +5,8 @@ export const STAGE_META: Record<Stage, { label: string; color: string }> = {
   enriched: { label: "Enriched", color: "#6F8FAF" },
   contacted: { label: "Emailed", color: "#D4A24C" },
   responded: { label: "Responded", color: "#9A80BE" },
-  in_conversation: { label: "In conversation", color: "#4C9A8A" },
-  pilot_partner: { label: "Pilot / partner", color: "#3E7B4F" },
+  in_conversation: { label: "In conversation", color: "#2F8C9B" },
+  pilot_partner: { label: "Pilot / partner", color: "#2F6B3F" },
   declined: { label: "Declined", color: "#C0705F" },
 };
 

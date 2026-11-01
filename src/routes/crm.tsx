@@ -276,7 +276,7 @@ function Crm() {
       </Suspense>
 
       {view === "list" && (
-        <div className="absolute inset-0 z-10 overflow-y-auto bg-background pb-48 pt-[calc(env(safe-area-inset-top)+4.5rem)] md:pr-[26rem]">
+        <div className="absolute inset-0 z-10 overflow-y-auto bg-background pb-24 pt-[calc(env(safe-area-inset-top)+8rem)] md:pr-[26rem]">
           <OrgList orgs={filtered} onSelect={select} />
         </div>
       )}
@@ -304,6 +304,37 @@ function Crm() {
             <Trophy />
           </IconButton>
         </div>
+        <div className="flex items-center gap-2">
+          <div className={`${glass} pointer-events-auto flex rounded-full p-1`} role="tablist">
+            {(
+              [
+                ["map", "Map", <MapIcon key="m" />],
+                ["list", "List", <List key="l" />],
+              ] as const
+            ).map(([v, text, icon]) => (
+              <button
+                key={v}
+                type="button"
+                role="tab"
+                aria-selected={view === v}
+                onClick={() => setView(v)}
+                className={`flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-medium [&_svg]:size-4 ${view === v ? "bg-ink text-paper" : ""}`}
+              >
+                {icon}
+                {text}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={logHere}
+            disabled={locating}
+            className="pointer-events-auto flex h-12 items-center gap-2 rounded-full bg-plum px-4 text-sm font-semibold text-paper shadow-soft disabled:opacity-60 [&_svg]:size-5"
+          >
+            <MapPinPlus />
+            {locating ? "Finding you…" : "Log a visit here"}
+          </button>
+        </div>
         {orgsQ.error && (
           <div className={`${glass} pointer-events-auto rounded-xl px-3 py-2 text-sm text-ember`}>
             Could not load the CRM: {orgsQ.error.message}
@@ -322,13 +353,16 @@ function Crm() {
         {panel === "board" && <Leaderboard />}
       </div>
 
-      {/* Bottom: legend (tap to hide or show), map/list switch and "log a visit here" */}
+      {/* Bottom: legend, tap an entry to hide or show it */}
       {!selected && !draft && (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 space-y-2 p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
           {view === "map" && (
             <div
               className={`${glass} pointer-events-auto flex gap-1 overflow-x-auto rounded-2xl p-1.5 text-xs [scrollbar-width:none] md:max-w-[calc(100%-4rem)] md:flex-wrap md:overflow-visible`}
             >
+              <span className="shrink-0 self-center px-1.5 text-[11px] text-muted-foreground">
+                Tap to hide or show
+              </span>
               <button
                 type="button"
                 aria-pressed={filters.visitedOnly}
@@ -399,37 +433,6 @@ function Crm() {
               )}
             </div>
           )}
-          <div className="flex items-center gap-2">
-            <div className={`${glass} pointer-events-auto flex rounded-full p-1`} role="tablist">
-              {(
-                [
-                  ["map", "Map", <MapIcon key="m" />],
-                  ["list", "List", <List key="l" />],
-                ] as const
-              ).map(([v, text, icon]) => (
-                <button
-                  key={v}
-                  type="button"
-                  role="tab"
-                  aria-selected={view === v}
-                  onClick={() => setView(v)}
-                  className={`flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-medium [&_svg]:size-4 ${view === v ? "bg-ink text-paper" : ""}`}
-                >
-                  {icon}
-                  {text}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={logHere}
-              disabled={locating}
-              className="pointer-events-auto flex h-12 items-center gap-2 rounded-full bg-plum px-4 text-sm font-semibold text-paper shadow-soft disabled:opacity-60 [&_svg]:size-5"
-            >
-              <MapPinPlus />
-              {locating ? "Finding you…" : "Log a visit here"}
-            </button>
-          </div>
         </div>
       )}
 
@@ -519,7 +522,7 @@ function SearchBox({
         </button>
       )}
       {open && hits.length > 0 && (
-        <div className={`${glass} absolute inset-x-0 top-12 rounded-xl p-1`}>
+        <div className={`${glass} absolute inset-x-0 top-12 z-50 rounded-xl p-1`}>
           {hits.map((o) => (
             <button
               key={o.id}

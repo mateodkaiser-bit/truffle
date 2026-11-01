@@ -262,7 +262,7 @@ export function CrmMap({ orgs, selectedId, onSelect, onTapEmpty, draft, marks, o
 
   return (
     // Bigger buttons for thumbs; the locate button sits clear of the bottom bar.
-    <div className="absolute inset-0 [&_.mapboxgl-ctrl-bottom-right]:mb-[calc(env(safe-area-inset-bottom)+8.5rem)] [&_.maplibregl-ctrl-bottom-right]:mb-[calc(env(safe-area-inset-bottom)+8.5rem)] [&_.mapboxgl-ctrl-group_button]:size-11 [&_.maplibregl-ctrl-group_button]:size-11">
+    <div className="absolute inset-0 [&_.mapboxgl-ctrl-bottom-right]:mb-[calc(env(safe-area-inset-bottom)+4.5rem)] [&_.maplibregl-ctrl-bottom-right]:mb-[calc(env(safe-area-inset-bottom)+4.5rem)] [&_.mapboxgl-ctrl-group_button]:size-11 [&_.maplibregl-ctrl-group_button]:size-11">
       <div ref={el} className="h-full w-full" />
     </div>
   );
