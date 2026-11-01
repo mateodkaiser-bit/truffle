@@ -34,3 +34,5 @@ export const CHANNEL_LABEL: Record<Channel, string> = {
 export const VISITED_COLOR = "#2B2124";
 /** Soft gold halo behind the most promising places nobody has contacted or visited yet. */
 export const PROMISING_COLOR = "#E8C25A";
+/** Colour for lead pipeline places nobody has reached yet. */
+export const PIPELINE_COLOR = "#A8B48E";

@@ -28,13 +28,21 @@ import {
   applyFilters,
   countByStage,
   DEFAULT_FILTERS,
+  isFreshLead,
+  matchesBase,
   LEAD_STATUS_LABEL,
   LEAD_STATUSES,
   leadStatus,
   type CrmFilters,
   type LeadStatus,
 } from "@/lib/crm/filters";
-import { PROMISING_COLOR, STAGE_META, TYPE_LABEL, VISITED_COLOR } from "@/lib/crm/stages";
+import {
+  PIPELINE_COLOR,
+  PROMISING_COLOR,
+  STAGE_META,
+  TYPE_LABEL,
+  VISITED_COLOR,
+} from "@/lib/crm/stages";
 import { ORG_TYPES, STAGES, type OrgType, type Organization } from "@/lib/crm/types";
 import { CrmLogin } from "@/components/crm/crm-login";
 import { OrgCard } from "@/components/crm/org-card";
@@ -173,7 +181,21 @@ function Crm() {
       .slice(0, TOP_PICKS);
     return new Set(fresh.map(([id]) => id));
   }, [orgs, activity, model]);
-  const marks = useMemo(() => ({ visited, promising }), [visited, promising]);
+  const scores = useMemo(
+    () => new Map(orgs.map((o) => [o.id, scoreOrg(o, activity.get(o.id), model).total])),
+    [orgs, activity, model],
+  );
+  const marks = useMemo(() => ({ visited, promising, scores }), [visited, promising, scores]);
+  const pipelineCount = useMemo(
+    () =>
+      orgs.filter(
+        (o) =>
+          isFreshLead(o, marks) &&
+          filters.stages.includes(o.stage) &&
+          matchesBase(o, { ...filters, showPipeline: true }, undefined, marks),
+      ).length,
+    [orgs, marks, filters],
+  );
 
   const filtered = useMemo(
     () => applyFilters(orgs, filters, undefined, marks),
@@ -195,6 +217,9 @@ function Crm() {
     (filters.dueOnly ? 1 : 0) +
     (filters.visitedOnly ? 1 : 0) +
     (filters.promisingOnly ? 1 : 0) +
+    (filters.minScore ? 1 : 0) +
+    (filters.hasEmail ? 1 : 0) +
+    (filters.hasPriceInsight ? 1 : 0) +
     (filters.hiddenLeadStatus.join() === DEFAULT_FILTERS.hiddenLeadStatus.join() ? 0 : 1);
   const leadCounts = useMemo(() => {
     const c: Partial<Record<LeadStatus, number>> = {};
@@ -330,6 +355,20 @@ function Crm() {
                 />
                 Top picks
                 <span className="opacity-60">{promising.size}</span>
+              </button>
+              <button
+                type="button"
+                aria-pressed={filters.showPipeline}
+                onClick={() => set({ showPipeline: !filters.showPipeline })}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 font-medium ${filters.showPipeline ? "" : "line-through opacity-40"}`}
+                title="Researched leads from the lead pipeline that nobody has contacted or visited yet"
+              >
+                <span
+                  className="inline-block size-2.5 rounded-full"
+                  style={{ background: PIPELINE_COLOR }}
+                />
+                Pipeline leads
+                <span className="text-muted-foreground">{pipelineCount}</span>
               </button>
               <span className="my-1 w-px shrink-0 bg-border" />
               {STAGES.map((s) => {
@@ -606,6 +645,43 @@ function FilterPanel({
         />
         Only next steps due today or earlier
       </label>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="text-xs font-semibold">
+          Lead score
+          <select
+            className={sel}
+            value={filters.minScore}
+            onChange={(e) => set({ minScore: Number(e.target.value) })}
+          >
+            <option value={0}>Any</option>
+            {[30, 40, 50, 60].map((n) => (
+              <option key={n} value={n}>
+                {n} or more
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="space-y-1.5 pt-5 text-sm">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={filters.hasEmail}
+              onChange={(e) => set({ hasEmail: e.target.checked })}
+              className="size-4"
+            />
+            Has email
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={filters.hasPriceInsight}
+              onChange={(e) => set({ hasPriceInsight: e.target.checked })}
+              className="size-4"
+            />
+            Has price insight
+          </label>
+        </div>
+      </div>
       <div className="flex items-center justify-between border-t pt-3 text-sm">
         <button type="button" className="underline" onClick={onReset}>
           Reset filters

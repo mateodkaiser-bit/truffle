@@ -23,6 +23,19 @@ describe("crm filters", () => {
     expect(names).toContain("Koffiebranderij Zuidwind");
   });
 
+  it("hides fresh pipeline leads with the layer toggle and filters by score", () => {
+    const marks = { visited: new Set<string>(), promising: new Set<string>() };
+    const off = { ...DEFAULT_FILTERS, showPipeline: false, hiddenLeadStatus: [] };
+    const names = applyFilters(DEMO_ORGS, off, today, marks).map((o) => o.name);
+    expect(names).not.toContain("Restaurant Gras");
+    expect(names).toContain("Koffiebranderij Zuidwind");
+    const scores = new Map(DEMO_ORGS.map((o) => [o.id, o.name === "Restaurant Gras" ? 55 : 10]));
+    const top = { ...DEFAULT_FILTERS, minScore: 50, hiddenLeadStatus: [] };
+    expect(applyFilters(DEMO_ORGS, top, today, { ...marks, scores }).map((o) => o.name)).toEqual([
+      "Restaurant Gras",
+    ]);
+  });
+
   it("matches search words in any order, ignoring accents and case", () => {
     const f = { ...DEFAULT_FILTERS, q: "zuidwind KOFFIE" };
     expect(applyFilters(DEMO_ORGS, f, today).map((o) => o.name)).toEqual([

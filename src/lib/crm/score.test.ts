@@ -61,6 +61,15 @@ describe("lead score", () => {
     expect(sig("priority-C")).toBeGreaterThan(0);
   });
 
+  it("adds Pancake owner signals", () => {
+    const model = learnFromHistory([], new Map());
+    const sig = (tags: string[]) =>
+      scoreOrg(org({ tags }), undefined, model, now).parts.find((p) => p.key === "signals")!;
+    expect(sig(["pancake"]).value).toBe(6);
+    expect(sig(["pancake", "owner-known", "owner-email"]).value).toBe(11);
+    expect(sig(["pancake", "owner-known", "owner-email"]).reason).toContain("owner's own email");
+  });
+
   it("counts a visit as a conversation", () => {
     const model = learnFromHistory([], new Map());
     const o = org({ stage: "responded" });

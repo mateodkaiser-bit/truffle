@@ -183,6 +183,23 @@ export function scoreOrg(
     signals = 5;
     sigWhy = "has a reason to fit";
   }
+  // Pancake trial data: a verified owner-run restaurant, and how well we can reach the owner.
+  if (o.tags.includes("pancake") && !pipeline && !priority && signals < 6) {
+    signals = 6;
+    sigWhy = "owner-run restaurant verified by Pancake";
+  }
+  if (o.tags.includes("owner-known")) {
+    signals += 3;
+    sigWhy += ", owner known";
+  }
+  if (o.tags.includes("owner-email")) {
+    signals += 2;
+    sigWhy += ", owner's own email";
+  }
+  if (o.tags.includes("linkedin-engaged")) {
+    signals += 2;
+    sigWhy += ", engaged on LinkedIn";
+  }
   if (o.tags.includes("price-insight")) {
     signals += 2;
     sigWhy += ", price opener ready";

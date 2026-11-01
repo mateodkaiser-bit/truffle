@@ -13,10 +13,20 @@ export type CrmFilters = {
   promisingOnly: boolean;
   /** Lead pipeline statuses to hide; organisations that are not pipeline leads always show. */
   hiddenLeadStatus: LeadStatus[];
+  /** Show pipeline leads nobody has contacted or visited yet. */
+  showPipeline: boolean;
+  /** Only places scoring at least this much. */
+  minScore: number;
+  hasEmail: boolean;
+  hasPriceInsight: boolean;
 };
 
-/** Organisation ids the map marks: visited in person, and the top picks. */
-export type Marks = { visited: Set<string>; promising: Set<string> };
+/** What the map marks per organisation: visited in person, top picks, and the lead score. */
+export type Marks = {
+  visited: Set<string>;
+  promising: Set<string>;
+  scores?: Map<string, number>;
+};
 
 export const LEAD_STATUSES = ["open", "unverified", "check", "likely-closed"] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
@@ -42,8 +52,21 @@ export const DEFAULT_FILTERS: CrmFilters = {
   dueOnly: false,
   visitedOnly: false,
   promisingOnly: false,
-  hiddenLeadStatus: ["check", "likely-closed"],
+  hiddenLeadStatus: ["unverified", "check", "likely-closed"],
+  showPipeline: true,
+  minScore: 0,
+  hasEmail: false,
+  hasPriceInsight: false,
 };
+
+/** A lead pipeline place the team has not reached yet: drawn as its own layer on the map. */
+export function isFreshLead(o: Organization, marks?: Marks) {
+  return (
+    leadStatus(o) != null &&
+    (o.stage === "researched" || o.stage === "enriched") &&
+    !marks?.visited.has(o.id)
+  );
+}
 
 const norm = (s: string | null | undefined) =>
   (s ?? "")
@@ -60,6 +83,10 @@ export function todayIso(now = new Date()) {
 export function matchesBase(o: Organization, f: CrmFilters, today = todayIso(), marks?: Marks) {
   if (f.visitedOnly && !marks?.visited.has(o.id)) return false;
   if (f.promisingOnly && !marks?.promising.has(o.id)) return false;
+  if (!f.showPipeline && isFreshLead(o, marks)) return false;
+  if (f.minScore && (marks?.scores?.get(o.id) ?? 0) < f.minScore) return false;
+  if (f.hasEmail && !o.email) return false;
+  if (f.hasPriceInsight && !o.tags.includes("price-insight")) return false;
   if (f.types.length && !f.types.includes(o.type)) return false;
   if (f.city && norm(o.city) !== norm(f.city)) return false;
   if (f.tag && !o.tags.includes(f.tag)) return false;
@@ -96,7 +123,9 @@ export function countByStage(
   marks?: Marks,
 ) {
   const counts = Object.fromEntries(STAGES.map((s) => [s, 0])) as Record<Stage, number>;
-  for (const o of orgs) if (matchesBase(o, f, today, marks)) counts[o.stage]++;
+  // Fresh pipeline leads have their own legend entry, so the stage counts leave them out.
+  for (const o of orgs)
+    if (!isFreshLead(o, marks) && matchesBase(o, f, today, marks)) counts[o.stage]++;
   return counts;
 }
 

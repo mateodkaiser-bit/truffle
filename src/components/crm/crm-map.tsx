@@ -6,8 +6,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 // The build bundles the worker itself; the dev server injects its client into worker files,
 // so dev loads the same version from jsDelivr instead.
 import bundledWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-import { PROMISING_COLOR, STAGE_META, VISITED_COLOR } from "@/lib/crm/stages";
-import type { Marks } from "@/lib/crm/filters";
+import { PIPELINE_COLOR, PROMISING_COLOR, STAGE_META, VISITED_COLOR } from "@/lib/crm/stages";
+import { isFreshLead, type Marks } from "@/lib/crm/filters";
 import { STAGES, type Organization } from "@/lib/crm/types";
 
 // Mapbox light when the Lovable Mapbox connector provides a token (as in Spotmapper); otherwise
@@ -39,6 +39,7 @@ function toGeoJson(orgs: Organization[], marks: Marks): FeatureCollection {
           name: o.name,
           visited: marks.visited.has(o.id),
           promising: marks.promising.has(o.id),
+          pipeline: isFreshLead(o, marks),
         },
       })),
   };
@@ -187,7 +188,7 @@ export function CrmMap({ orgs, selectedId, onSelect, onTapEmpty, draft, marks, o
               ["case", ["get", "visited"], 10, 9],
             ],
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            "circle-color": stageColor as any,
+            "circle-color": ["case", ["get", "pipeline"], PIPELINE_COLOR, stageColor] as any,
             "circle-stroke-color": ["case", ["get", "visited"], VISITED_COLOR, "#ffffff"],
             "circle-stroke-width": [
               "interpolate",

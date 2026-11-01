@@ -201,7 +201,18 @@ export function OrgCard({ org, score }: { org: Organization; score?: OrgScore | 
             {org.hook && <Field label="Why they fit">{org.hook}</Field>}
             {org.promised && <Field label="What we promised">{org.promised}</Field>}
             {org.they_asked && <Field label="What they asked">{org.they_asked}</Field>}
-            {org.pitch_angle && <Field label="Opener">{org.pitch_angle}</Field>}
+            {org.pitch_angle && (
+              <Field label="Opener">
+                {org.pitch_angle.split("\n").map((line, i) => (
+                  <p
+                    key={i}
+                    className={`${i ? "mt-1.5" : ""} ${/^Check by eye/.test(line) ? "text-ember" : ""}`}
+                  >
+                    {line}
+                  </p>
+                ))}
+              </Field>
+            )}
             {org.opening_hours && <Field label="Opening hours">{org.opening_hours}</Field>}
             {!org.hook && !org.promised && !org.they_asked && !org.pitch_angle && (
               <p className="text-sm text-muted-foreground">Nothing noted yet.</p>

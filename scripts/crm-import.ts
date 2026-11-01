@@ -320,10 +320,13 @@ function latestLeadFile(prefix: string) {
 }
 
 const LEAD_TYPES = new Set(["restaurant", "cafe"]);
-const LEAD_STATUSES = new Set(["open", "unverified"]);
+
+/** Fields the lead pipeline owns: refreshed on every run without touching the team's edits. */
+const leadRefresh = new Map<string, Partial<OrgRow>>();
+const PIPELINE_LINE = /bij jullie/;
 
 /** One pipeline lead (truffle-leads score.py export) as an organisation, keyed on lead_id. */
-function leadOrg(r: Row, source: string, openers: Map<string, string[]>) {
+function leadOrg(r: Row, source: string, openers: Map<string, string>) {
   const leadId = r["lead_id"]!;
   const status = r["status"] || "unverified";
   const signals = r["signals"] ?? "";
@@ -345,7 +348,7 @@ function leadOrg(r: Row, source: string, openers: Map<string, string[]>) {
     pos_hint:
       signals.match(/lightspeed|tebi|untill|mr\.? ?winston|qr\/other pos/gi)?.join(", ") ?? null,
     hook: nn(signals),
-    pitch_angle: openers.get(leadId)?.join("\n") ?? null,
+    pitch_angle: openers.get(leadId) ?? null,
     notes: [
       `Lead score ${r["score"]}. Status: ${status}${r["status_reasons"] ? ` (${r["status_reasons"]})` : ""}.`,
       permits.length > 0 &&
@@ -359,6 +362,20 @@ function leadOrg(r: Row, source: string, openers: Map<string, string[]>) {
       openers.has(leadId) ? "price-insight" : "",
     ].filter(Boolean),
   });
+  leadRefresh.set(o.external_ref, {
+    hook: o.hook,
+    pitch_angle: o.pitch_angle,
+    notes: o.notes,
+    tags: o.tags,
+    lat: o.lat,
+    lon: o.lon,
+    website: o.website,
+    email: o.email,
+    instagram: o.instagram,
+    phone: o.phone,
+    opened_year: o.opened_year,
+    pos_hint: o.pos_hint,
+  });
   if (status === "likely_closed") {
     o.stage = "declined";
     o.declined_reason = `Likely closed: ${r["status_reasons"] || "see lead pipeline"}`;
@@ -367,9 +384,9 @@ function leadOrg(r: Row, source: string, openers: Map<string, string[]>) {
 }
 
 /**
- * Lead pipeline exports in ~/truffle-leads/data (see its README). By default only places with
- * status open or unverified and type restaurant or cafe; --all-leads adds the rest (to check,
- * bars, fast food, unmapped permit addresses) and the likely-closed file as declined.
+ * Lead pipeline exports in ~/truffle-leads/data (see its README), newest file of each kind. By
+ * default every place with status open, plus unverified restaurants and cafes; --all-leads adds
+ * the rest (to check, unmapped permit addresses) and the likely-closed file as declined.
  */
 function importLeads() {
   const latest = latestLeadFile("leads");
@@ -377,21 +394,37 @@ function importLeads() {
     return console.warn(`No leads-DATE.csv in ${LEADS_DIR}, skipping the lead pipeline.`);
   const source = latest.replace(".csv", "");
 
-  // Price lines per lead: insights osm_id is lead_id without the "osm:" prefix.
-  const openers = new Map<string, string[]>();
+  // Price lines per lead (insights osm_id is lead_id without "osm:"): the 3 dishes furthest
+  // from the places around them. A gap over 50% is usually a different portion or a misread
+  // menu, so it is flagged for a look before anyone uses it.
+  const byLead = new Map<string, { gap: number; line: string }[]>();
   const insights = latestLeadFile("insights");
   if (insights)
     for (const r of readCsv(join(LEADS_DIR, insights))) {
       if (!r["osm_id"] || !r["line"]) continue;
       const id = `osm:${r["osm_id"]}`;
-      openers.set(id, [...(openers.get(id) ?? []), r["line"]]);
+      const gap = Math.abs(Number(r["diff_pct"]) || 0);
+      const line = gap > 50 ? `Check by eye (${Math.round(gap)}% gap): ${r["line"]}` : r["line"];
+      byLead.set(id, [...(byLead.get(id) ?? []), { gap, line }]);
     }
+  const openers = new Map(
+    [...byLead].map(([id, rows]) => [
+      id,
+      rows
+        .sort((a, b) => b.gap - a.gap)
+        .slice(0, 3)
+        .map((x) => x.line)
+        .join("\n"),
+    ]),
+  );
 
   let n = 0;
   for (const r of readCsv(join(LEADS_DIR, latest))) {
     if (!r["lead_id"]) continue;
-    if (!ALL_LEADS && !(LEAD_TYPES.has(r["type"] ?? "") && LEAD_STATUSES.has(r["status"] ?? "")))
-      continue;
+    // Open places of any kind; unverified restaurants and cafes too (hidden on the map by default).
+    const keep =
+      r["status"] === "open" || (r["status"] === "unverified" && LEAD_TYPES.has(r["type"] ?? ""));
+    if (!ALL_LEADS && !keep) continue;
     const o = leadOrg(r, source, openers);
     orgs.set(o.external_ref, o);
     n++;
@@ -406,8 +439,52 @@ function importLeads() {
     }
   console.log(
     `Leads: ${n} from ${latest}${closed ? ` and ${closed}` : ""}` +
-      `${insights ? `, price lines from ${insights}` : ""}${ALL_LEADS ? "" : " (open or unverified restaurants and cafes; --all-leads for the rest)"}`,
+      `${insights ? `, price lines from ${insights}` : ""}${ALL_LEADS ? "" : " (open places, plus unverified restaurants and cafes; --all-leads for the rest)"}`,
   );
+}
+
+const bareName = (n: string) =>
+  norm(
+    n.trim().replace(/^(restaurant|eetcaf[eé]|grand caf[eé]|caf[eé]|bar|brasserie|bistro)\s+/i, ""),
+  );
+
+/**
+ * A pipeline lead that is also in another list (same email, or same name at the same postcode
+ * or within 80 m) is folded into that organisation, so a place we already emailed or visited
+ * keeps its history and shows up once. Returns lead ref -> the ref it was merged into.
+ */
+function mergeLeadDuplicates() {
+  const merged = new Map<string, string>();
+  const others = [...orgs.values()].filter((o) => !o.external_ref.startsWith("lead:"));
+  for (const lead of [...orgs.values()].filter((o) => o.external_ref.startsWith("lead:"))) {
+    const target = others.find(
+      (o) =>
+        (!!lead.email && !!o.email && lead.email.toLowerCase() === o.email.toLowerCase()) ||
+        (bareName(o.name) === bareName(lead.name) &&
+          ((!!o.postcode && o.postcode.replace(/\s/g, "") === lead.postcode?.replace(/\s/g, "")) ||
+            (o.lat != null &&
+              o.lon != null &&
+              lead.lat != null &&
+              lead.lon != null &&
+              distM(o.lat, o.lon, lead.lat, lead.lon) < 80))),
+    );
+    if (!target) continue;
+    const { external_ref: _ref, name: _name, stage, notes, ...rest } = lead;
+    fill(target, rest);
+    bump(target, stage);
+    if (notes) addNote(target, notes);
+    for (const c of contacts.values())
+      if (c.org_ref === lead.external_ref) c.org_ref = target.external_ref;
+    for (const i of interactions.values())
+      if (i.org_ref === lead.external_ref) i.org_ref = target.external_ref;
+    const refresh = leadRefresh.get(lead.external_ref);
+    if (refresh) leadRefresh.set(target.external_ref, { ...refresh, notes: null });
+    leadRefresh.delete(lead.external_ref);
+    orgs.delete(lead.external_ref);
+    merged.set(lead.external_ref, target.external_ref);
+  }
+  if (merged.size) console.log(`Merged ${merged.size} pipeline leads into places already listed.`);
+  return merged;
 }
 
 function importRestaurants() {
@@ -742,6 +819,91 @@ async function signIn(sb: ReturnType<typeof createClient>) {
   if (exchangeError) throw exchangeError;
 }
 
+/**
+ * Weekly reruns: update what the lead pipeline owns on rows that already exist (signals, price
+ * lines, status tags, lead score note, missing contact details) and leave the team's edits alone.
+ */
+async function refreshLeadFields(sb: ReturnType<typeof createClient>, ids: Map<string, string>) {
+  type Existing = Pick<
+    Organization,
+    | "id"
+    | "external_ref"
+    | "tags"
+    | "notes"
+    | "hook"
+    | "pitch_angle"
+    | "website"
+    | "email"
+    | "instagram"
+    | "phone"
+    | "lat"
+    | "lon"
+    | "opened_year"
+    | "pos_hint"
+  >;
+  const existing = new Map<string, Existing>();
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await sb
+      .from("organizations")
+      .select(
+        "id, external_ref, tags, notes, hook, pitch_angle, website, email, instagram, phone, lat, lon, opened_year, pos_hint",
+      )
+      .range(from, from + 999);
+    if (error) throw error;
+    for (const r of (data ?? []) as Existing[]) if (r.external_ref) existing.set(r.external_ref, r);
+    if (!data || data.length < 1000) break;
+  }
+  const patches: [string, Partial<OrgRow>][] = [];
+  for (const [ref, next] of leadRefresh) {
+    const cur = existing.get(ref);
+    if (!cur || !ids.has(ref)) continue;
+    const patch: Partial<OrgRow> = {};
+    if (next.hook && next.hook !== cur.hook && (!cur.hook || cur.hook.startsWith("permit ")))
+      patch.hook = next.hook;
+    const pitch = next.pitch_angle ?? null;
+    if (pitch !== cur.pitch_angle && (!cur.pitch_angle || PIPELINE_LINE.test(cur.pitch_angle)))
+      patch.pitch_angle = pitch;
+    if (next.notes) {
+      let notes = cur.notes ?? "";
+      for (const line of next.notes.split("\n")) {
+        const key = line.startsWith("Lead score") ? /^Lead score .*$/m : /^Permits .*$/m;
+        notes = key.test(notes)
+          ? notes.replace(key, line)
+          : [notes, line].filter(Boolean).join("\n");
+      }
+      if (notes !== cur.notes) patch.notes = notes;
+    }
+    const tags = [
+      ...new Set([
+        ...cur.tags.filter((t) => !/^lead-/.test(t) && t !== "price-insight"),
+        ...(next.tags ?? []),
+      ]),
+    ];
+    if (tags.join() !== cur.tags.join()) patch.tags = tags;
+    for (const k of [
+      "website",
+      "email",
+      "instagram",
+      "phone",
+      "lat",
+      "lon",
+      "opened_year",
+      "pos_hint",
+    ] as const)
+      if (cur[k] == null && next[k] != null) (patch as Record<string, unknown>)[k] = next[k];
+    if (Object.keys(patch).length) patches.push([cur.id, patch]);
+  }
+  for (let i = 0; i < patches.length; i += 20) {
+    await Promise.all(
+      patches.slice(i, i + 20).map(async ([id, patch]) => {
+        const { error } = await sb.from("organizations").update(patch).eq("id", id);
+        if (error) throw new Error(`organizations: ${error.message}`);
+      }),
+    );
+  }
+  console.log(`Refreshed pipeline fields on ${patches.length} existing places.`);
+}
+
 async function write() {
   const url = env("VITE_SUPABASE_URL") || env("SUPABASE_URL");
   const key = env("VITE_SUPABASE_PUBLISHABLE_KEY") || env("SUPABASE_PUBLISHABLE_KEY");
@@ -783,6 +945,24 @@ async function write() {
     for (const r of data ?? []) if (r.external_ref) ids.set(r.external_ref, r.id);
     if (!data || data.length < 1000) break;
   }
+  // Pipeline leads now folded into another organisation: move what was logged on the old row
+  // to the one it belongs to, then remove the duplicate.
+  for (const [leadRef, targetRef] of mergedLeads) {
+    const from = ids.get(leadRef);
+    const to = ids.get(targetRef);
+    if (!from || !to) continue;
+    for (const t of ["interactions", "contacts"] as const) {
+      const { error } = await sb.from(t).update({ org_id: to }).eq("org_id", from);
+      if (error) throw new Error(`${t}: ${error.message}`);
+    }
+    const { error } = await sb.from("organizations").delete().eq("id", from);
+    if (error) throw new Error(`organizations: ${error.message}`);
+    ids.delete(leadRef);
+    console.log(`Folded duplicate ${leadRef} into ${targetRef}.`);
+  }
+
+  if (!REFRESH) await refreshLeadFields(sb, ids);
+
   const withOrg = <T extends { org_ref: string }>(rows: T[]) =>
     rows.flatMap(({ org_ref, ...rest }) =>
       ids.has(org_ref) ? [{ ...rest, org_id: ids.get(org_ref) }] : [],
@@ -807,6 +987,7 @@ importLeads();
 importRestaurants();
 importOutreach(overrides.types ?? {});
 importSpotmapper();
+const mergedLeads = mergeLeadDuplicates();
 applyOverrides(overrides.orgs ?? []);
 await geocode();
 
