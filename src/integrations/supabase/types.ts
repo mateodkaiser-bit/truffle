@@ -88,6 +88,39 @@ export type Database = {
           },
         ]
       }
+      crm_join_secret: {
+        Row: {
+          created_at: string
+          id: number
+          secret_hash: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          secret_hash: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          secret_hash?: string
+        }
+        Relationships: []
+      }
+      crm_link_members: {
+        Row: {
+          joined_at: string
+          user_id: string
+        }
+        Insert: {
+          joined_at?: string
+          user_id: string
+        }
+        Update: {
+          joined_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       crm_team: {
         Row: {
           created_at: string
@@ -286,6 +319,7 @@ export type Database = {
     }
     Functions: {
       is_crm_member: { Args: never; Returns: boolean }
+      join_crm: { Args: { secret: string }; Returns: boolean }
     }
     Enums: {
       crm_channel: "email" | "call" | "visit" | "form" | "dm" | "meeting"
