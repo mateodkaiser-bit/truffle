@@ -683,10 +683,20 @@ async function geocode() {
 // ---------- write ----------
 
 /**
- * Password from TRUFFLE_CRM_PASSWORD if set, otherwise an emailed login link: the link lands on a
+ * The team link secret from CRM_JOIN_SECRET, a password from TRUFFLE_CRM_PASSWORD, otherwise an emailed login link: the link lands on a
  * small server on this machine (or you paste the address it opened), and the code is exchanged here.
  */
 async function signIn(sb: ReturnType<typeof createClient>) {
+  // The team join link's secret (the part after #join=), as the app does on /crm#join=...
+  const joinSecret = env("CRM_JOIN_SECRET");
+  if (joinSecret) {
+    const { error } = await sb.auth.signInAnonymously();
+    if (error) throw error;
+    const { data, error: joinError } = await sb.rpc("join_crm", { secret: joinSecret });
+    if (joinError) throw joinError;
+    if (data !== true) throw new Error("CRM_JOIN_SECRET does not match the current team link.");
+    return;
+  }
   const email = (env("TRUFFLE_CRM_EMAIL") || prompt("Your team email:") || "").trim().toLowerCase();
   if (!email) throw new Error("No email given.");
   const password = env("TRUFFLE_CRM_PASSWORD");
