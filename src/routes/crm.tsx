@@ -5,7 +5,14 @@ import { List, LogOut, Map as MapIcon, SlidersHorizontal, Trophy, X } from "luci
 import { Toaster } from "@/components/ui/sonner";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { checkMembership, isDemoMode, setDemoMode, useLeaderboard, useOrgs } from "@/lib/crm/api";
+import {
+  checkMembership,
+  joinWithSecret,
+  isDemoMode,
+  setDemoMode,
+  useLeaderboard,
+  useOrgs,
+} from "@/lib/crm/api";
 import {
   applyFilters,
   countByStage,
@@ -50,21 +57,57 @@ function CrmPage() {
     return () => data.subscription.unsubscribe();
   }, [demo]);
 
+  // Team link: /crm#join=<secret>. The secret is read once and taken out of the address bar.
+  const [joinSecret] = useState(() => {
+    const m = window.location.hash.match(/join=([\w-]+)/);
+    if (m) window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    return m?.[1] ?? null;
+  });
+  const [joinError, setJoinError] = useState("");
+  const [joined, setJoined] = useState(!joinSecret);
+  useEffect(() => {
+    if (demo || !joinSecret || joined || session === undefined) return;
+    if (!session) {
+      supabase.auth.signInAnonymously().then(({ error }) => {
+        if (error) setJoinError(`Could not open the team link: ${error.message}`);
+      });
+      return;
+    }
+    joinWithSecret(joinSecret).then(
+      (ok) => {
+        if (!ok) setJoinError("This team link is no longer valid. Ask for the new one.");
+        setJoined(true);
+      },
+      (e: Error) => setJoinError(`Could not open the team link: ${e.message}`),
+    );
+  }, [demo, joinSecret, joined, session]);
+
+  const userId = session?.user.id;
   const email = session?.user.email;
   useEffect(() => {
     if (demo) return setMember(true);
-    if (!email) return setMember(undefined);
-    checkMembership(email).then(setMember, () => setMember(false));
-  }, [email, demo]);
+    if (!userId || !joined) return setMember(undefined);
+    checkMembership().then(setMember, () => setMember(false));
+  }, [userId, joined, demo]);
 
   if (!demo) {
-    if (session === undefined) return <Centered>Loading…</Centered>;
+    if (joinError)
+      return (
+        <Centered>
+          <p>{joinError}</p>
+        </Centered>
+      );
+    if (session === undefined || (joinSecret && !joined)) return <Centered>Loading…</Centered>;
     if (!session) return <CrmLogin />;
     if (member === undefined) return <Centered>Checking access…</Centered>;
     if (!member)
       return (
         <Centered>
-          <p>{email} is not on the team list.</p>
+          <p>
+            {email
+              ? `${email} is not on the team list.`
+              : "This device has no access yet. Open the team link again."}
+          </p>
           <button className="mt-3 underline" onClick={() => supabase.auth.signOut()}>
             Sign out
           </button>

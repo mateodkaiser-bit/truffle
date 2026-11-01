@@ -111,7 +111,10 @@ export type CrmDatabase = {
       crm_team: Table<{ email: string; name: string | null; created_at: string }>;
     };
     Views: { [_ in never]: never };
-    Functions: { is_crm_member: { Args: Record<string, never>; Returns: boolean } };
+    Functions: {
+      is_crm_member: { Args: Record<string, never>; Returns: boolean };
+      join_crm: { Args: { secret: string }; Returns: boolean };
+    };
     Enums: {
       crm_org_type: OrgType;
       crm_stage: Stage;

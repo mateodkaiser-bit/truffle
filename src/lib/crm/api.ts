@@ -144,15 +144,19 @@ export function useLogInteraction() {
 }
 
 /** True when the signed-in user is on the crm_team allowlist (RLS hides the row otherwise). */
-export async function checkMembership(email: string) {
+/** True for emails on crm_team and for devices that joined with the team link. */
+export async function checkMembership() {
   if (demo) return true;
-  const { data, error } = await db
-    .from("crm_team")
-    .select("email")
-    .eq("email", email.toLowerCase())
-    .maybeSingle();
+  const { data, error } = await db.rpc("is_crm_member");
   if (error) throw error;
-  return !!data;
+  return data === true;
+}
+
+/** Adds the signed-in (usually anonymous) user to the team when the join secret matches. */
+export async function joinWithSecret(secret: string) {
+  const { data, error } = await db.rpc("join_crm", { secret });
+  if (error) throw error;
+  return data === true;
 }
 
 /** First names of the team, from crm_team.name. Used for the @people chips on a visit. */
