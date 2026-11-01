@@ -204,10 +204,7 @@ export function OrgCard({ org, score }: { org: Organization; score?: OrgScore | 
             {org.pitch_angle && (
               <Field label="Opener">
                 {org.pitch_angle.split("\n").map((line, i) => (
-                  <p
-                    key={i}
-                    className={`${i ? "mt-1.5" : ""} ${/^Check by eye/.test(line) ? "text-ember" : ""}`}
-                  >
+                  <p key={i} className={i ? "mt-1.5" : ""}>
                     {line}
                   </p>
                 ))}

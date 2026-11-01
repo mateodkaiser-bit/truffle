@@ -396,17 +396,18 @@ function importLeads() {
   const source = latest.replace(".csv", "");
 
   // Price lines per lead (insights osm_id is lead_id without "osm:"): the 3 dishes furthest
-  // from the places around them. A gap over 50% is usually a different portion or a misread
-  // menu, so it is flagged for a look before anyone uses it.
+  // from the places around them, and only fair comparisons. A gap over 50% is usually a
+  // different portion or a misread menu, and fewer than 5 nearby places is too thin a sample,
+  // so those are left out.
   const byLead = new Map<string, { gap: number; line: string }[]>();
   const insights = latestLeadFile("insights");
   if (insights)
     for (const r of readCsv(join(LEADS_DIR, insights))) {
       if (!r["osm_id"] || !r["line"]) continue;
-      const id = `osm:${r["osm_id"]}`;
       const gap = Math.abs(Number(r["diff_pct"]) || 0);
-      const line = gap > 50 ? `Check by eye (${Math.round(gap)}% gap): ${r["line"]}` : r["line"];
-      byLead.set(id, [...(byLead.get(id) ?? []), { gap, line }]);
+      if (gap > 50 || Number(r["peers"]) < 5) continue;
+      const id = `osm:${r["osm_id"]}`;
+      byLead.set(id, [...(byLead.get(id) ?? []), { gap, line: r["line"] }]);
     }
   const openers = new Map(
     [...byLead].map(([id, rows]) => [
