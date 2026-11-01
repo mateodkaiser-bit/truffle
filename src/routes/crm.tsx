@@ -267,6 +267,7 @@ function Crm() {
           onSelect={select}
           draft={draft}
           marks={marks}
+          fitQuery={filters.q}
           onLocate={(lat, lon) => (me.current = { lat, lon })}
           onTapEmpty={(lat, lon, close) => {
             setSelectedId(null);

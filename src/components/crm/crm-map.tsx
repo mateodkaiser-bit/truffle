@@ -58,7 +58,7 @@ const view = {
   attributionControl: false as const,
 };
 
-/** Mapbox GL with the token, else MapLibre on PDOK. Their APIs match for what this map uses. */
+/** Mapbox GL with the token, else MapLibre on CARTO (world) and PDOK (NL). Their APIs match for what this map uses. */
 async function loadMap(): Promise<{ lib: MapLib; makeMap: (c: HTMLElement) => MlMap }> {
   if (MAPBOX_TOKEN) {
     const [{ default: mapboxgl }] = await Promise.all([
@@ -73,7 +73,8 @@ async function loadMap(): Promise<{ lib: MapLib; makeMap: (c: HTMLElement) => Ml
         new mapboxgl.Map({
           container,
           style: "mapbox://styles/mapbox/light-v11",
-          projection: "mercator",
+          // A globe when zoomed out (we will expand beyond NL), flat map up close.
+          projection: "globe",
           ...view,
         }) as unknown as MlMap,
     };
@@ -92,6 +93,14 @@ async function loadMap(): Promise<{ lib: MapLib; makeMap: (c: HTMLElement) => Ml
         style: {
           version: 8,
           sources: {
+            // Light world map under the Dutch one, so the map does not stop at the border.
+            world: {
+              type: "raster",
+              tiles: ["https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"],
+              tileSize: 256,
+              maxzoom: 19,
+              attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+            },
             pdok: {
               type: "raster",
               tiles: [PDOK_TILES],
@@ -100,7 +109,10 @@ async function loadMap(): Promise<{ lib: MapLib; makeMap: (c: HTMLElement) => Ml
               attribution: "Kaartgegevens &copy; Kadaster",
             },
           },
-          layers: [{ id: "pdok", type: "raster", source: "pdok" }],
+          layers: [
+            { id: "world", type: "raster", source: "world" },
+            { id: "pdok", type: "raster", source: "pdok", minzoom: 6 },
+          ],
         },
         ...view,
       }),
@@ -115,11 +127,22 @@ type Props = {
   onTapEmpty: (lat: number, lon: number, close: boolean) => void;
   draft: { lat: number; lon: number } | null;
   marks: Marks;
+  /** Search text: when it changes, the map flies to the places that match. */
+  fitQuery: string;
   /** Called with the user's position each time the locate button finds it. */
   onLocate: (lat: number, lon: number) => void;
 };
 
-export function CrmMap({ orgs, selectedId, onSelect, onTapEmpty, draft, marks, onLocate }: Props) {
+export function CrmMap({
+  orgs,
+  selectedId,
+  onSelect,
+  onTapEmpty,
+  draft,
+  marks,
+  onLocate,
+  fitQuery,
+}: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
   const draftMarker = useRef<Marker | null>(null);
@@ -244,6 +267,31 @@ export function CrmMap({ orgs, selectedId, onSelect, onTapEmpty, draft, marks, o
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
+
+  // Fly to what the search found, once the typing pauses.
+  useEffect(() => {
+    const m = map.current;
+    if (!fitQuery.trim() || !m) return;
+    const t = setTimeout(() => {
+      const pts = latest.current.orgs.filter((o) => o.lat != null && o.lon != null);
+      if (!pts.length || pts.length > 300) return;
+      const lons = pts.map((o) => o.lon!);
+      const lats = pts.map((o) => o.lat!);
+      const narrow = m.getContainer().clientWidth < 768;
+      m.fitBounds(
+        [
+          [Math.min(...lons), Math.min(...lats)],
+          [Math.max(...lons), Math.max(...lats)],
+        ],
+        {
+          maxZoom: 15,
+          duration: 800,
+          padding: { top: narrow ? 140 : 120, bottom: narrow ? 90 : 110, left: 40, right: 40 },
+        },
+      );
+    }, 450);
+    return () => clearTimeout(t);
+  }, [fitQuery]);
 
   useEffect(() => {
     draftMarker.current?.remove();
