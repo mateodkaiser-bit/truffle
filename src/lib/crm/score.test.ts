@@ -52,6 +52,15 @@ describe("lead score", () => {
     expect(fit("Rotterdam").reason).toContain("Rotterdam");
   });
 
+  it("reads letter priorities from hand-researched leads", () => {
+    const model = learnFromHistory([], new Map());
+    const sig = (tag: string) =>
+      scoreOrg(org({ tags: [tag] }), undefined, model, now).parts.find((p) => p.key === "signals")!
+        .value;
+    expect(sig("priority-A")).toBeGreaterThan(sig("priority-C"));
+    expect(sig("priority-C")).toBeGreaterThan(0);
+  });
+
   it("counts a visit as a conversation", () => {
     const model = learnFromHistory([], new Map());
     const o = org({ stage: "responded" });

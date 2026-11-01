@@ -166,15 +166,19 @@ export function scoreOrg(
 
   // 3. Lead signals
   const pipeline = Number(o.notes?.match(/Lead score (\d+)/)?.[1]);
-  const priority = Number(o.tags.find((t) => /^priority-\d$/.test(t))?.slice(9));
+  // Hand-researched leads carry priority-A/B/C (older lists 1/2/3).
+  const priority = o.tags
+    .find((t) => /^priority-[a-c1-3]$/i.test(t))
+    ?.slice(9)
+    .toUpperCase();
   let signals = 0;
   let sigWhy = "no lead signals";
   if (pipeline) {
     signals = (pipeline / 15) * 15;
     sigWhy = `pipeline score ${pipeline}`;
   } else if (priority) {
-    signals = [0, 13, 9, 6][priority] ?? 4;
-    sigWhy = `priority ${priority} lead`;
+    signals = { A: 13, "1": 13, B: 10, "2": 10, C: 7, "3": 7 }[priority] ?? 5;
+    sigWhy = `priority ${priority} lead (hand-researched)`;
   } else if (o.hook) {
     signals = 5;
     sigWhy = "has a reason to fit";
