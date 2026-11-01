@@ -22,25 +22,35 @@ export type OrgScore = { total: number; parts: ScorePart[]; note: string | null 
 const GOOD: Stage[] = ["responded", "in_conversation", "pilot_partner"];
 const REACHED: Stage[] = [...GOOD, "contacted", "declined"];
 
-/** Features of a place that can be compared with the places that turned out well. */
+const GENERIC = new Set(["restaurant", "cafe", "café", "pub", "bar", "fast food", "pastry shop"]);
+
+/**
+ * Features of a place that can be compared with the places that turned out well. Contact
+ * details are left out: they say how we reached a place, not whether it was a good fit.
+ */
 function features(o: Organization, now = new Date()): string[] {
-  const f: string[] = [`type:${o.type}`];
-  for (const c of (o.category ?? "").toLowerCase().split(/[,;/]/))
-    if (c.trim()) f.push(`category:${c.trim()}`);
+  const f: string[] = [];
+  for (const c of (o.category ?? "").toLowerCase().split(/[,;/]/)) {
+    const t = c.trim();
+    // Spotmapper put addresses or the bare place type in this field: skip both.
+    if (t && t.length <= 24 && !/\d|netherlands|nederland/.test(t) && !GENERIC.has(t))
+      f.push(`category:${t}`);
+  }
   if (o.city) f.push(`city:${o.city.replace(/\s*\(.*\)$/, "")}`);
-  for (const p of (o.pos_hint ?? "").toLowerCase().split(/,\s*/)) if (p) f.push(`pos:${p}`);
-  if (o.email) f.push("has:email");
-  if (o.instagram) f.push("has:instagram");
+  for (const p of (o.pos_hint ?? "").toLowerCase().split(/,\s*/))
+    if (p && !/not named|unknown/.test(p)) f.push(`pos:${p}`);
   if (o.pitch_angle && o.tags.includes("price-insight")) f.push("has:price insight");
   if (o.opened_year && o.opened_year >= now.getFullYear() - 3) f.push("young");
   const ls = leadStatus(o);
   if (ls) f.push(`lead:${ls}`);
-  return f;
+  // Restaurants learn from restaurants, suppliers from suppliers.
+  return f.map((k) => `${o.type}|${k}`);
 }
 
 const FEATURE_LABEL = (k: string) =>
   k
-    .replace(/^(category|city|pos|type):/, "")
+    .replace(/^[^|]*\|/, "")
+    .replace(/^(category|city|pos):/, "")
     .replace(/^has:/, "has ")
     .replace(/^lead:/, "")
     .replace("young", "opened recently");
