@@ -9,9 +9,14 @@ export type CrmFilters = {
   dueOnly: boolean;
   /** Only places the team visited in person. */
   visitedOnly: boolean;
+  /** Only the top picks: promising places nobody has contacted or visited yet. */
+  promisingOnly: boolean;
   /** Lead pipeline statuses to hide; organisations that are not pipeline leads always show. */
   hiddenLeadStatus: LeadStatus[];
 };
+
+/** Organisation ids the map marks: visited in person, and the top picks. */
+export type Marks = { visited: Set<string>; promising: Set<string> };
 
 export const LEAD_STATUSES = ["open", "unverified", "check", "likely-closed"] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
@@ -36,6 +41,7 @@ export const DEFAULT_FILTERS: CrmFilters = {
   q: "",
   dueOnly: false,
   visitedOnly: false,
+  promisingOnly: false,
   hiddenLeadStatus: ["check", "likely-closed"],
 };
 
@@ -51,13 +57,9 @@ export function todayIso(now = new Date()) {
 }
 
 /** Everything except the stage filter, so the legend can count per stage. */
-export function matchesBase(
-  o: Organization,
-  f: CrmFilters,
-  today = todayIso(),
-  visited?: Set<string>,
-) {
-  if (f.visitedOnly && !visited?.has(o.id)) return false;
+export function matchesBase(o: Organization, f: CrmFilters, today = todayIso(), marks?: Marks) {
+  if (f.visitedOnly && !marks?.visited.has(o.id)) return false;
+  if (f.promisingOnly && !marks?.promising.has(o.id)) return false;
   if (f.types.length && !f.types.includes(o.type)) return false;
   if (f.city && norm(o.city) !== norm(f.city)) return false;
   if (f.tag && !o.tags.includes(f.tag)) return false;
@@ -82,19 +84,19 @@ export function applyFilters(
   orgs: Organization[],
   f: CrmFilters,
   today = todayIso(),
-  visited?: Set<string>,
+  marks?: Marks,
 ) {
-  return orgs.filter((o) => f.stages.includes(o.stage) && matchesBase(o, f, today, visited));
+  return orgs.filter((o) => f.stages.includes(o.stage) && matchesBase(o, f, today, marks));
 }
 
 export function countByStage(
   orgs: Organization[],
   f: CrmFilters,
   today = todayIso(),
-  visited?: Set<string>,
+  marks?: Marks,
 ) {
   const counts = Object.fromEntries(STAGES.map((s) => [s, 0])) as Record<Stage, number>;
-  for (const o of orgs) if (matchesBase(o, f, today, visited)) counts[o.stage]++;
+  for (const o of orgs) if (matchesBase(o, f, today, marks)) counts[o.stage]++;
   return counts;
 }
 

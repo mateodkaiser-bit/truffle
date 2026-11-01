@@ -34,12 +34,15 @@ import {
   type CrmFilters,
   type LeadStatus,
 } from "@/lib/crm/filters";
-import { STAGE_META, TYPE_LABEL, VISITED_COLOR } from "@/lib/crm/stages";
+import { PROMISING_COLOR, STAGE_META, TYPE_LABEL, VISITED_COLOR } from "@/lib/crm/stages";
 import { ORG_TYPES, STAGES, type OrgType, type Organization } from "@/lib/crm/types";
 import { CrmLogin } from "@/components/crm/crm-login";
 import { OrgCard } from "@/components/crm/org-card";
 import { OrgList } from "@/components/crm/org-list";
 import { NewPlace } from "@/components/crm/new-place";
+
+/** How many untouched places the map highlights as top picks. */
+const TOP_PICKS = 100;
 
 const CrmMap = lazy(() => import("@/components/crm/crm-map").then((m) => ({ default: m.CrmMap })));
 
@@ -154,14 +157,31 @@ function Crm() {
     [activity],
   );
   const model = useMemo(() => learnFromHistory(orgs, activity), [orgs, activity]);
+  // Top picks: the best-scoring places nobody has contacted or visited yet.
+  const promising = useMemo(() => {
+    const fresh = orgs
+      .filter(
+        (o) =>
+          (o.stage === "researched" || o.stage === "enriched") &&
+          !o.do_not_contact &&
+          !activity.get(o.id),
+      )
+      .map((o) => [o.id, scoreOrg(o, undefined, model).total] as const)
+      // The demo has too few places to reach the bar; show its best ones anyway.
+      .filter(([, t]) => t >= (isDemoMode() ? 0 : 30))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, TOP_PICKS);
+    return new Set(fresh.map(([id]) => id));
+  }, [orgs, activity, model]);
+  const marks = useMemo(() => ({ visited, promising }), [visited, promising]);
 
   const filtered = useMemo(
-    () => applyFilters(orgs, filters, undefined, visited),
-    [orgs, filters, visited],
+    () => applyFilters(orgs, filters, undefined, marks),
+    [orgs, filters, marks],
   );
   const counts = useMemo(
-    () => countByStage(orgs, filters, undefined, visited),
-    [orgs, filters, visited],
+    () => countByStage(orgs, filters, undefined, marks),
+    [orgs, filters, marks],
   );
   const selected = orgs.find((o) => o.id === selectedId) ?? null;
   const selectedScore = selected ? scoreOrg(selected, activity.get(selected.id), model) : undefined;
@@ -174,6 +194,7 @@ function Crm() {
     (filters.tag ? 1 : 0) +
     (filters.dueOnly ? 1 : 0) +
     (filters.visitedOnly ? 1 : 0) +
+    (filters.promisingOnly ? 1 : 0) +
     (filters.hiddenLeadStatus.join() === DEFAULT_FILTERS.hiddenLeadStatus.join() ? 0 : 1);
   const leadCounts = useMemo(() => {
     const c: Partial<Record<LeadStatus, number>> = {};
@@ -219,7 +240,7 @@ function Crm() {
           selectedId={selectedId}
           onSelect={select}
           draft={draft}
-          visited={visited}
+          marks={marks}
           onLocate={(lat, lon) => (me.current = { lat, lon })}
           onTapEmpty={(lat, lon, close) => {
             setSelectedId(null);
@@ -290,11 +311,25 @@ function Crm() {
                 className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 font-medium ${filters.visitedOnly ? "bg-ink text-paper" : ""}`}
               >
                 <span
-                  className="inline-block size-3 rounded-full border-[3px] bg-background"
+                  className="inline-block size-3 rounded-full border-2 bg-background"
                   style={{ borderColor: VISITED_COLOR }}
                 />
                 Visited
                 <span className="opacity-60">{visited.size}</span>
+              </button>
+              <button
+                type="button"
+                aria-pressed={filters.promisingOnly}
+                onClick={() => set({ promisingOnly: !filters.promisingOnly })}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 font-medium ${filters.promisingOnly ? "bg-ink text-paper" : ""}`}
+                title="Best-scoring places nobody has contacted or visited yet"
+              >
+                <span
+                  className="inline-block size-3.5 rounded-full"
+                  style={{ background: PROMISING_COLOR, opacity: 0.8 }}
+                />
+                Top picks
+                <span className="opacity-60">{promising.size}</span>
               </button>
               <span className="my-1 w-px shrink-0 bg-border" />
               {STAGES.map((s) => {

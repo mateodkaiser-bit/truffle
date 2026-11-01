@@ -6,7 +6,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 // The build bundles the worker itself; the dev server injects its client into worker files,
 // so dev loads the same version from jsDelivr instead.
 import bundledWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-import { STAGE_META, VISITED_COLOR } from "@/lib/crm/stages";
+import { PROMISING_COLOR, STAGE_META, VISITED_COLOR } from "@/lib/crm/stages";
+import type { Marks } from "@/lib/crm/filters";
 import { STAGES, type Organization } from "@/lib/crm/types";
 
 // Mapbox light when the Lovable Mapbox connector provides a token (as in Spotmapper); otherwise
@@ -23,7 +24,7 @@ const stageColor = [
   "#888",
 ];
 
-function toGeoJson(orgs: Organization[], visited: Set<string>): FeatureCollection {
+function toGeoJson(orgs: Organization[], marks: Marks): FeatureCollection {
   return {
     type: "FeatureCollection",
     features: orgs
@@ -32,7 +33,13 @@ function toGeoJson(orgs: Organization[], visited: Set<string>): FeatureCollectio
         type: "Feature",
         id: o.id,
         geometry: { type: "Point", coordinates: [o.lon!, o.lat!] },
-        properties: { id: o.id, stage: o.stage, name: o.name, visited: visited.has(o.id) },
+        properties: {
+          id: o.id,
+          stage: o.stage,
+          name: o.name,
+          visited: marks.visited.has(o.id),
+          promising: marks.promising.has(o.id),
+        },
       })),
   };
 }
@@ -106,27 +113,19 @@ type Props = {
   /** Tap away from any dot. `close` is true at street level, where a tap means "log a place here". */
   onTapEmpty: (lat: number, lon: number, close: boolean) => void;
   draft: { lat: number; lon: number } | null;
-  visited: Set<string>;
+  marks: Marks;
   /** Called with the user's position each time the locate button finds it. */
   onLocate: (lat: number, lon: number) => void;
 };
 
-export function CrmMap({
-  orgs,
-  selectedId,
-  onSelect,
-  onTapEmpty,
-  draft,
-  visited,
-  onLocate,
-}: Props) {
+export function CrmMap({ orgs, selectedId, onSelect, onTapEmpty, draft, marks, onLocate }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
   const draftMarker = useRef<Marker | null>(null);
   const makeMarker = useRef<((lat: number, lon: number) => Marker) | null>(null);
   const ready = useRef(false);
-  const latest = useRef({ orgs, selectedId, onSelect, onTapEmpty, visited, onLocate });
-  latest.current = { orgs, selectedId, onSelect, onTapEmpty, visited, onLocate };
+  const latest = useRef({ orgs, selectedId, onSelect, onTapEmpty, marks, onLocate });
+  latest.current = { orgs, selectedId, onSelect, onTapEmpty, marks, onLocate };
 
   useEffect(() => {
     let cancelled = false;
@@ -150,7 +149,19 @@ export function CrmMap({
       m.on("load", () => {
         m.addSource("orgs", {
           type: "geojson",
-          data: toGeoJson(latest.current.orgs, latest.current.visited),
+          data: toGeoJson(latest.current.orgs, latest.current.marks),
+        });
+        m.addLayer({
+          id: "orgs-promising",
+          type: "circle",
+          source: "orgs",
+          filter: ["==", ["get", "promising"], true],
+          paint: {
+            "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 8, 11, 12, 15, 16],
+            "circle-color": PROMISING_COLOR,
+            "circle-opacity": 0.6,
+            "circle-blur": 0.25,
+          },
         });
         m.addLayer({
           id: "orgs-selected",
@@ -169,11 +180,11 @@ export function CrmMap({
               ["linear"],
               ["zoom"],
               6,
-              ["case", ["get", "visited"], 5, 3.5],
+              ["case", ["get", "visited"], 4.5, 3.5],
               11,
-              ["case", ["get", "visited"], 8, 6],
+              ["case", ["get", "visited"], 7, 6],
               15,
-              ["case", ["get", "visited"], 11, 9],
+              ["case", ["get", "visited"], 10, 9],
             ],
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             "circle-color": stageColor as any,
@@ -183,9 +194,9 @@ export function CrmMap({
               ["linear"],
               ["zoom"],
               6,
-              ["case", ["get", "visited"], 2, 0.5],
+              ["case", ["get", "visited"], 1.5, 0.5],
               12,
-              ["case", ["get", "visited"], 3.5, 1.5],
+              ["case", ["get", "visited"], 2.5, 1.5],
             ],
           },
         });
@@ -219,8 +230,8 @@ export function CrmMap({
 
   useEffect(() => {
     if (!ready.current || !map.current) return;
-    (map.current.getSource("orgs") as GeoJSONSource | undefined)?.setData(toGeoJson(orgs, visited));
-  }, [orgs, visited]);
+    (map.current.getSource("orgs") as GeoJSONSource | undefined)?.setData(toGeoJson(orgs, marks));
+  }, [orgs, marks]);
 
   useEffect(() => {
     const m = map.current;

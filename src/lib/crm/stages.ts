@@ -1,13 +1,13 @@
 import type { Channel, OrgType, Stage } from "./types";
 
 export const STAGE_META: Record<Stage, { label: string; color: string }> = {
-  researched: { label: "Researched", color: "#9A938C" },
-  enriched: { label: "Enriched", color: "#3B82F6" },
-  contacted: { label: "Emailed", color: "#F59E0B" },
-  responded: { label: "Responded", color: "#8B5CF6" },
-  in_conversation: { label: "In conversation", color: "#0E9F8E" },
-  pilot_partner: { label: "Pilot / partner", color: "#16A34A" },
-  declined: { label: "Declined", color: "#B42318" },
+  researched: { label: "Researched", color: "#B9B1A7" },
+  enriched: { label: "Enriched", color: "#6F8FAF" },
+  contacted: { label: "Emailed", color: "#D4A24C" },
+  responded: { label: "Responded", color: "#9A80BE" },
+  in_conversation: { label: "In conversation", color: "#4C9A8A" },
+  pilot_partner: { label: "Pilot / partner", color: "#3E7B4F" },
+  declined: { label: "Declined", color: "#C0705F" },
 };
 
 export const TYPE_LABEL: Record<OrgType, string> = {
@@ -30,5 +30,7 @@ export const CHANNEL_LABEL: Record<Channel, string> = {
   form: "Form",
 };
 
-/** Ring colour for places the team visited in person, on the map and in the legend. */
-export const VISITED_COLOR = "#E0218A";
+/** Dark ring around places the team visited in person, on the map and in the legend. */
+export const VISITED_COLOR = "#2B2124";
+/** Soft gold halo behind the most promising places nobody has contacted or visited yet. */
+export const PROMISING_COLOR = "#E8C25A";

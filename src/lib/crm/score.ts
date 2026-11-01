@@ -223,7 +223,7 @@ export function scoreOrg(
       label: "Conversation",
       value: clamp(conv, 50),
       max: 50,
-      color: "#16A34A",
+      color: "#3E7B4F",
       reason: convWhy.join(", "),
     },
     {
@@ -231,7 +231,7 @@ export function scoreOrg(
       label: "Like past wins",
       value: clamp(fit, 15),
       max: 15,
-      color: "#8B5CF6",
+      color: "#9A80BE",
       reason: fitWhy,
     },
     {
@@ -239,7 +239,7 @@ export function scoreOrg(
       label: "Lead signals",
       value: clamp(signals, 15),
       max: 15,
-      color: "#3B82F6",
+      color: "#6F8FAF",
       reason: sigWhy,
     },
     {
@@ -247,7 +247,7 @@ export function scoreOrg(
       label: "Reachable",
       value: clamp(reach, 10),
       max: 10,
-      color: "#F59E0B",
+      color: "#D4A24C",
       reason: ways.length ? ways.map(([w]) => w).join(", ") : "no contact details",
     },
     {
@@ -255,7 +255,7 @@ export function scoreOrg(
       label: "Timing",
       value: clamp(timing, 10),
       max: 10,
-      color: "#0E9F8E",
+      color: "#4C9A8A",
       reason: timeWhy.join(", ") || "opening year unknown",
     },
   ];
