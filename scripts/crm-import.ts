@@ -602,6 +602,10 @@ const hostOf = (u: string | null | undefined) =>
  * data proves for the lead score: pancake, owner-known, owner-email (an address on the
  * restaurant's own domain) and linkedin-engaged (they reacted to a post about horeca costs).
  */
+const pancakeRefs = new Set<string>();
+const PANCAKE_TAG =
+  /^(pancake|owner-known|owner-email|linkedin-engaged|horeca-influencer|site-down)/;
+
 function importPancake() {
   if (!existsSync(FILES.pancake)) return console.warn(`No ${FILES.pancake}, skipping Pancake.`);
   let matched = 0;
@@ -651,8 +655,50 @@ function importPancake() {
         .join(" "),
     });
     if (email) bump(o, "enriched");
+    pancakeRefs.add(o.external_ref);
   }
   console.log(`Pancake: ${matched} owners matched to known places, ${added} new restaurants`);
+}
+
+/**
+ * Places that were already in the CRM get the Pancake findings too, without --refresh: its tags
+ * are added, owner and opening year fill only empty fields, and "Pancake:" notes are appended once.
+ */
+async function refreshPancakeFields(
+  sb: ReturnType<typeof createClient>,
+  merged: Map<string, string>,
+) {
+  const refs = [...new Set([...pancakeRefs].map((r) => merged.get(r) ?? r))];
+  let n = 0;
+  for (let i = 0; i < refs.length; i += 100) {
+    const { data, error } = await sb
+      .from("organizations")
+      .select("id, external_ref, tags, owner_name, opened_year, notes")
+      .in("external_ref", refs.slice(i, i + 100));
+    if (error) throw new Error(`organizations: ${error.message}`);
+    for (const cur of (data ?? []) as Pick<
+      Organization,
+      "id" | "tags" | "owner_name" | "opened_year" | "notes"
+    >[] &
+      { external_ref: string }[]) {
+      const next = orgs.get(cur.external_ref);
+      if (!next) continue;
+      const patch: Partial<OrgRow> = {};
+      const tags = [...new Set([...cur.tags, ...next.tags.filter((t) => PANCAKE_TAG.test(t))])];
+      if (tags.length !== cur.tags.length) patch.tags = tags;
+      if (!cur.owner_name && next.owner_name) patch.owner_name = next.owner_name;
+      if (!cur.opened_year && next.opened_year) patch.opened_year = next.opened_year;
+      const add = (next.notes ?? "")
+        .split("\n")
+        .filter((l) => l.startsWith("Pancake: ") && !cur.notes?.includes(l));
+      if (add.length) patch.notes = [cur.notes, ...add].filter(Boolean).join("\n");
+      if (!Object.keys(patch).length) continue;
+      const { error: e } = await sb.from("organizations").update(patch).eq("id", cur.id);
+      if (e) throw new Error(`organizations: ${e.message}`);
+      n++;
+    }
+  }
+  console.log(`Added Pancake findings to ${n} places already in the CRM.`);
 }
 
 function importSpotmapper() {
@@ -1031,6 +1077,7 @@ async function write() {
   }
 
   if (!REFRESH) await refreshLeadFields(sb, ids);
+  if (!REFRESH) await refreshPancakeFields(sb, mergedLeads);
 
   const withOrg = <T extends { org_ref: string }>(rows: T[]) =>
     rows.flatMap(({ org_ref, ...rest }) =>
