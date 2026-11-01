@@ -39,6 +39,7 @@ const FILES = {
   accountants: join(DATA, "accountant-leads-2026-10-28.csv"),
   restaurants: join(DATA, "restaurant-leads-2026-10-31.csv"),
   outreach: join(DATA, "outreach-log-2026-10-28.csv"),
+  pancake: join(DATA, "pancake-leads-2026-11-01.csv"),
 };
 
 if (/truffle-pilots\/(raw|work\/[^/]+\.csv)/.test(Object.values(FILES).join(" "))) {
@@ -586,6 +587,67 @@ function importOutreach(types: Record<string, OrgType>) {
   }
 }
 
+const hostOf = (u: string | null | undefined) =>
+  (u ?? "")
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split("/")[0] ?? "";
+
+/**
+ * Restaurant owners found with Pancake during the November 2026 trial (owner name, LinkedIn,
+ * work email), curated to real restaurants. Matches a known place by website domain, then by
+ * name; otherwise adds the restaurant. The owner becomes a contact, and tags record what the
+ * data proves for the lead score: pancake, owner-known, owner-email (an address on the
+ * restaurant's own domain) and linkedin-engaged (they reacted to a post about horeca costs).
+ */
+function importPancake() {
+  if (!existsSync(FILES.pancake)) return console.warn(`No ${FILES.pancake}, skipping Pancake.`);
+  let matched = 0;
+  let added = 0;
+  for (const r of readCsv(FILES.pancake)) {
+    if (!r["lead_id"] || !r["employer"]) continue;
+    const domain = hostOf(r["company_domain"]);
+    let o = domain
+      ? [...orgs.values()].find((x) => x.type === "restaurant" && hostOf(x.website) === domain)
+      : undefined;
+    o ??= findOrg(r["employer"], { type: "restaurant", city: r["city"] || undefined });
+    if (o) matched++;
+    else {
+      o = blank(`pancake:${r["lead_id"]}`, r["employer"], "restaurant", "pancake-2026-11-01");
+      fill(o, { city: nn(r["city"]), website: domain ? `https://${domain}` : null });
+      orgs.set(o.external_ref, o);
+      added++;
+    }
+    const email = nn(r["work_email"]);
+    const ownDomain = !!email && !!domain && email.toLowerCase().endsWith(`@${domain}`);
+    fill(o, {
+      owner_name: nn(r["name"]),
+      hook: nn(r["signal"]),
+      tags: [
+        "pancake",
+        "owner-known",
+        ownDomain ? "owner-email" : "",
+        r["signal"] ? "linkedin-engaged" : "",
+      ].filter(Boolean),
+    });
+    addContact(o, {
+      name: r["name"],
+      role: r["title"],
+      email: email ?? undefined,
+      linkedin: r["linkedin_url"],
+      notes: [
+        `Found with Pancake (${r["play"]} search, ${r["fit"]}).`,
+        email && !ownDomain && `Email is on another domain (${email.split("@")[1]}): check first.`,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    });
+    if (email) bump(o, "enriched");
+  }
+  console.log(`Pancake: ${matched} owners matched to known places, ${added} new restaurants`);
+}
+
 function importSpotmapper() {
   if (!SPOTMAPPER_CSV)
     return console.warn("CRM_SPOTMAPPER_CSV not set, skipping Spotmapper visits.");
@@ -879,7 +941,7 @@ async function refreshLeadFields(sb: ReturnType<typeof createClient>, ids: Map<s
         ...(next.tags ?? []),
       ]),
     ];
-    if (tags.join() !== cur.tags.join()) patch.tags = tags;
+    if ([...tags].sort().join() !== [...cur.tags].sort().join()) patch.tags = tags;
     for (const k of [
       "website",
       "email",
@@ -987,6 +1049,7 @@ importLeads();
 importRestaurants();
 importOutreach(overrides.types ?? {});
 importSpotmapper();
+importPancake();
 const mergedLeads = mergeLeadDuplicates();
 applyOverrides(overrides.orgs ?? []);
 await geocode();
