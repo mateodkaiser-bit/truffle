@@ -327,6 +327,21 @@ const leadRefresh = new Map<string, Partial<OrgRow>>();
 const PIPELINE_LINE = /bij jullie/;
 
 /** One pipeline lead (truffle-leads score.py export) as an organisation, keyed on lead_id. */
+const ownerHints = new Map<string, string>();
+
+function applyOwnerHints() {
+  let n = 0;
+  for (const [ref, name] of ownerHints) {
+    const o = orgs.get(ref);
+    if (o && !o.owner_name) {
+      o.owner_name = name;
+      addNote(o, `Owner name from the restaurant's own website (${name}): check before using it.`);
+      n++;
+    }
+  }
+  console.log(`Owner names from restaurant websites: ${n}`);
+}
+
 function leadOrg(r: Row, source: string, openers: Map<string, string>) {
   const leadId = r["lead_id"]!;
   const status = r["status"] || "unverified";
@@ -345,7 +360,11 @@ function leadOrg(r: Row, source: string, openers: Map<string, string>) {
     email: firstEmail(r["email"] ?? ""),
     instagram: nn(r["instagram"]),
     phone: nn(r["phone"]),
-    opened_year: Number(signals.match(/since (\d{4})/)?.[1]) || null,
+    opened_year:
+      Number(
+        signals.match(/since (\d{4})/)?.[1] ?? signals.match(/site says opened (\d{4})/)?.[1],
+      ) || null,
+
     pos_hint:
       signals.match(/lightspeed|tebi|untill|mr\.? ?winston|qr\/other pos/gi)?.join(", ") ?? null,
     hook: nn(signals),
@@ -361,8 +380,18 @@ function leadOrg(r: Row, source: string, openers: Map<string, string>) {
       `lead-${status.replace(/_/g, "-")}`,
       r["type"] ?? "",
       openers.has(leadId) ? "price-insight" : "",
+      // Signals from the Amsterdam register, domain age and cached homepages (2026-11-02)
+      /new operator\?|new owner/.test(signals) ? "new-operator" : "",
+      /older business\?/.test(signals) ? "check-older-business" : "",
+      /register permit ended/.test(signals) ? "check-permit-ended" : "",
+      /several locations/.test(signals) ? "check-multi-site" : "",
+      /delivery: /.test(signals) ? "delivery-platforms" : "",
     ].filter(Boolean),
   });
+  // A name the restaurant's own site presents as owner or founder (page_signals.py). Applied after
+  // every other source, so Pancake and hand research win; see applyOwnerHints().
+  const ownerHint = signals.match(/owner on site: ([^;]+)/)?.[1]?.trim();
+  if (ownerHint) ownerHints.set(o.external_ref, ownerHint);
   leadRefresh.set(o.external_ref, {
     hook: o.hook,
     pitch_angle: o.pitch_angle,
@@ -407,7 +436,11 @@ function importLeads() {
       const gap = Math.abs(Number(r["diff_pct"]) || 0);
       if (gap > 50 || Number(r["peers"]) < 5) continue;
       const id = `osm:${r["osm_id"]}`;
-      byLead.set(id, [...(byLead.get(id) ?? []), { gap, line: r["line"] }]);
+      // cost_context (cbs.py): national price trend for the dish's main ingredient, always "Bron: CBS".
+      const line = r["cost_context"]
+        ? `${r["line"]}\nKosten landelijk: ${r["cost_context"]}`
+        : r["line"];
+      byLead.set(id, [...(byLead.get(id) ?? []), { gap, line }]);
     }
   const openers = new Map(
     [...byLead].map(([id, rows]) => [
@@ -1106,6 +1139,7 @@ importSpotmapper();
 importPancake();
 const mergedLeads = mergeLeadDuplicates();
 applyOverrides(overrides.orgs ?? []);
+applyOwnerHints();
 await geocode();
 
 const count = (f: (o: OrgRow) => string) =>
