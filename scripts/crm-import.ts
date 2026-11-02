@@ -893,6 +893,35 @@ function importPatches(merged: Map<string, string>) {
   );
 }
 
+/** Owner names from restaurant websites for rows already in the CRM: only where nobody named one. */
+async function refreshOwnerHints(sb: ReturnType<typeof createClient>) {
+  const refs = [...ownerHints.keys()];
+  let n = 0;
+  for (let i = 0; i < refs.length; i += 100) {
+    const { data, error } = await sb
+      .from("organizations")
+      .select("id, external_ref, owner_name, notes")
+      .in("external_ref", refs.slice(i, i + 100))
+      .is("owner_name", null);
+    if (error) throw new Error(`organizations: ${error.message}`);
+    for (const cur of (data ?? []) as (Pick<Organization, "id" | "notes"> & {
+      external_ref: string;
+    })[]) {
+      const name = ownerHints.get(cur.external_ref);
+      if (!name) continue;
+      const note = `Owner name from the restaurant's own website (${name}): check before using it.`;
+      const { error: e } = await sb
+        .from("organizations")
+        .update({ owner_name: name, notes: [cur.notes, note].filter(Boolean).join("\n") })
+        .eq("id", cur.id);
+      if (e) throw new Error(`organizations: ${e.message}`);
+      n++;
+    }
+  }
+  if (refs.length)
+    console.log(`Added owner names from websites to ${n} places already in the CRM.`);
+}
+
 /** Add patch findings to rows already in the CRM, without touching what the team changed. */
 async function refreshPatchedFields(sb: ReturnType<typeof createClient>) {
   const refs = [...patched.keys()];
@@ -1146,6 +1175,7 @@ async function write() {
   if (!REFRESH) await refreshLeadFields(sb, ids);
   if (!REFRESH) await refreshPancakeFields(sb, mergedLeads);
   await refreshPatchedFields(sb);
+  await refreshOwnerHints(sb);
 
   const withOrg = <T extends { org_ref: string }>(rows: T[]) =>
     rows.flatMap(({ org_ref, ...rest }) =>
