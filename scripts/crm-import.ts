@@ -11,8 +11,8 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { createInterface } from "node:readline";
-import { createClient } from "@supabase/supabase-js";
+import type { createClient } from "@supabase/supabase-js";
+import { crmClient, endScriptSession, scriptSignIn } from "./crm-session";
 import type {
   Channel,
   Contact,
@@ -823,6 +823,114 @@ function applyOverrides(list: Override[]) {
   }
 }
 
+// ---------- patches (findings added without code changes) ----------
+
+// Small JSON files in CRM_PATCH_DIR (default <CRM_DATA_DIR>/crm-patches), each an array of
+// { ref | match, tags_add?, notes_append?, next_step?, next_step_due?, pitch_angle?, do_not_contact? }.
+// `ref` is an organisation's external_ref (exact), `match` a lowercase name substring. Patches only
+// add: tags are joined, a note is appended once, next step and pitch fill empty fields only, and
+// do_not_contact can only be switched on. They never change a stage or delete anything, on new
+// rows and on rows the team already edited in the app.
+const PATCH_DIR = env("CRM_PATCH_DIR", join(DATA, "crm-patches"));
+type Patch = {
+  ref?: string;
+  match?: string;
+  tags_add?: string[];
+  notes_append?: string;
+  do_not_contact?: boolean;
+} & Partial<Pick<OrgRow, "next_step" | "next_step_due" | "pitch_angle">>;
+const PATCH_KEYS = new Set([
+  "ref",
+  "match",
+  "tags_add",
+  "notes_append",
+  "next_step",
+  "next_step_due",
+  "pitch_angle",
+  "do_not_contact",
+]);
+const PATCH_FIELDS = ["next_step", "next_step_due", "pitch_angle"] as const;
+const patched = new Map<string, Patch[]>();
+
+function importPatches(merged: Map<string, string>) {
+  if (!existsSync(PATCH_DIR)) return;
+  let n = 0;
+  let missed = 0;
+  for (const f of readdirSync(PATCH_DIR)
+    .filter((x) => x.endsWith(".json"))
+    .sort()) {
+    const list: unknown = JSON.parse(readFileSync(join(PATCH_DIR, f), "utf8"));
+    if (!Array.isArray(list)) {
+      console.warn(`Patch file ${f} is not a JSON array, skipped.`);
+      continue;
+    }
+    for (const p of list as Patch[]) {
+      const bad = Object.keys(p).filter((k) => !PATCH_KEYS.has(k));
+      if (bad.length || (!p.ref && !p.match)) {
+        console.warn(
+          `Patch in ${f} skipped: ${bad.length ? `unknown keys ${bad.join(", ")}` : "no ref or match"}.`,
+        );
+        continue;
+      }
+      const m = norm(p.match ?? "");
+      const o = p.ref
+        ? orgs.get(merged.get(p.ref) ?? p.ref)
+        : [...orgs.values()].find((x) => norm(x.name).includes(m));
+      if (!o) {
+        missed++;
+        continue;
+      }
+      fill(o, { tags: p.tags_add ?? [] });
+      if (p.notes_append && !o.notes?.includes(p.notes_append)) addNote(o, p.notes_append);
+      for (const k of PATCH_FIELDS) if (p[k] && !o[k]) o[k] = p[k] ?? null;
+      if (p.do_not_contact) o.do_not_contact = true;
+      patched.set(o.external_ref, [...(patched.get(o.external_ref) ?? []), p]);
+      n++;
+    }
+  }
+  console.log(
+    `Patches: ${n} applied from ${PATCH_DIR}${missed ? `, ${missed} matched nothing` : ""}.`,
+  );
+}
+
+/** Add patch findings to rows already in the CRM, without touching what the team changed. */
+async function refreshPatchedFields(sb: ReturnType<typeof createClient>) {
+  const refs = [...patched.keys()];
+  let n = 0;
+  for (let i = 0; i < refs.length; i += 100) {
+    const { data, error } = await sb
+      .from("organizations")
+      .select(
+        "id, external_ref, tags, notes, next_step, next_step_due, pitch_angle, do_not_contact",
+      )
+      .in("external_ref", refs.slice(i, i + 100));
+    if (error) throw new Error(`organizations: ${error.message}`);
+    for (const cur of (data ?? []) as (Pick<
+      Organization,
+      "id" | "tags" | "notes" | "next_step" | "next_step_due" | "pitch_angle" | "do_not_contact"
+    > & { external_ref: string })[]) {
+      const ps = patched.get(cur.external_ref) ?? [];
+      const update: Partial<OrgRow> = {};
+      const tags = [...new Set([...cur.tags, ...ps.flatMap((p) => p.tags_add ?? [])])];
+      if (tags.length !== cur.tags.length) update.tags = tags;
+      const add = ps
+        .map((p) => p.notes_append)
+        .filter((x): x is string => !!x && !cur.notes?.includes(x));
+      if (add.length) update.notes = [cur.notes, ...new Set(add)].filter(Boolean).join("\n");
+      for (const k of PATCH_FIELDS) {
+        const v = ps.find((p) => p[k])?.[k];
+        if (v && !cur[k]) update[k] = v;
+      }
+      if (ps.some((p) => p.do_not_contact) && !cur.do_not_contact) update.do_not_contact = true;
+      if (!Object.keys(update).length) continue;
+      const { error: e } = await sb.from("organizations").update(update).eq("id", cur.id);
+      if (e) throw new Error(`organizations: ${e.message}`);
+      n++;
+    }
+  }
+  if (refs.length) console.log(`Added patch findings to ${n} places already in the CRM.`);
+}
+
 // ---------- geocoding (PDOK for addresses, OSM by name, city centre as last resort) ----------
 
 const cache: Record<string, [number, number, string] | null> = existsSync(GEOCODE_CACHE)
@@ -906,66 +1014,6 @@ async function geocode() {
 }
 
 // ---------- write ----------
-
-/**
- * The team link secret from CRM_JOIN_SECRET, a password from TRUFFLE_CRM_PASSWORD, otherwise an emailed login link: the link lands on a
- * small server on this machine (or you paste the address it opened), and the code is exchanged here.
- */
-async function signIn(sb: ReturnType<typeof createClient>) {
-  // The team join link's secret (the part after #join=), as the app does on /crm#join=...
-  const joinSecret = env("CRM_JOIN_SECRET");
-  if (joinSecret) {
-    const { error } = await sb.auth.signInAnonymously();
-    if (error) throw error;
-    const { data, error: joinError } = await sb.rpc("join_crm", { secret: joinSecret });
-    if (joinError) throw joinError;
-    if (data !== true) throw new Error("CRM_JOIN_SECRET does not match the current team link.");
-    return;
-  }
-  const email = (env("TRUFFLE_CRM_EMAIL") || prompt("Your team email:") || "").trim().toLowerCase();
-  if (!email) throw new Error("No email given.");
-  const password = env("TRUFFLE_CRM_PASSWORD");
-  if (password) {
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    return;
-  }
-  const port = Number(env("CRM_LOGIN_PORT", "8789"));
-  let fromServer: (code: string) => void = () => {};
-  const served = new Promise<string>((r) => (fromServer = r));
-  const server = Bun.serve({
-    port,
-    fetch(req) {
-      const code = new URL(req.url).searchParams.get("code");
-      if (!code) return new Response("No login code in this link.", { status: 400 });
-      fromServer(code);
-      return new Response("Signed in. Close this tab and go back to the terminal.");
-    },
-  });
-  const { error } = await sb.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: `http://localhost:${port}/`, shouldCreateUser: true },
-  });
-  if (error) throw error;
-  console.log(
-    `Login link sent to ${email}. Open it on this Mac.\n` +
-      "If it opens the Truffle site instead of a 'Signed in' page, copy the full address from the " +
-      "address bar and paste it here.",
-  );
-  const rl = createInterface({ input: process.stdin });
-  const pasted = new Promise<string>((r) =>
-    rl.on("line", (line) => {
-      const code = line.match(/[?&]code=([^&#\s]+)/)?.[1];
-      if (code) r(decodeURIComponent(code));
-      else console.log("No code in that address; paste the whole URL.");
-    }),
-  );
-  const code = await Promise.race([served, pasted]);
-  rl.close();
-  await server.stop();
-  const { error: exchangeError } = await sb.auth.exchangeCodeForSession(code);
-  if (exchangeError) throw exchangeError;
-}
 
 /**
  * Weekly reruns: update what the lead pipeline owns on rows that already exist (signals, price
@@ -1053,23 +1101,9 @@ async function refreshLeadFields(sb: ReturnType<typeof createClient>, ids: Map<s
 }
 
 async function write() {
-  const url = env("VITE_SUPABASE_URL") || env("SUPABASE_URL");
-  const key = env("VITE_SUPABASE_PUBLISHABLE_KEY") || env("SUPABASE_PUBLISHABLE_KEY");
-  if (!url || !key)
-    throw new Error("Run from ~/truffle so Bun loads .env (Supabase URL and publishable key).");
-  const memory = new Map<string, string>();
-  const sb = createClient(url, key, {
-    auth: {
-      flowType: "pkce",
-      autoRefreshToken: false,
-      storage: {
-        getItem: (k) => memory.get(k) ?? null,
-        setItem: (k, v) => void memory.set(k, v),
-        removeItem: (k) => void memory.delete(k),
-      },
-    },
-  });
-  await signIn(sb);
+  const sb = crmClient();
+  const stored = await scriptSignIn(sb);
+  if (stored) console.log("Signed in with the stored CRM session (Keychain).");
   const { data: member } = await sb.rpc("is_crm_member");
   if (member !== true) throw new Error("Signed in, but this email is not on the crm_team list.");
 
@@ -1111,6 +1145,7 @@ async function write() {
 
   if (!REFRESH) await refreshLeadFields(sb, ids);
   if (!REFRESH) await refreshPancakeFields(sb, mergedLeads);
+  await refreshPatchedFields(sb);
 
   const withOrg = <T extends { org_ref: string }>(rows: T[]) =>
     rows.flatMap(({ org_ref, ...rest }) =>
@@ -1118,7 +1153,7 @@ async function write() {
     );
   await upsert("contacts", withOrg([...contacts.values()]));
   await upsert("interactions", withOrg([...interactions.values()]));
-  await sb.auth.signOut();
+  await endScriptSession(sb);
 }
 
 // ---------- main ----------
@@ -1139,6 +1174,7 @@ importSpotmapper();
 importPancake();
 const mergedLeads = mergeLeadDuplicates();
 applyOverrides(overrides.orgs ?? []);
+importPatches(mergedLeads);
 applyOwnerHints();
 await geocode();
 

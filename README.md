@@ -75,3 +75,31 @@ they are switched on under Filters. Paths can be changed with `CRM_DATA_DIR`, `C
 
 Every row has a stable `external_ref`, so a re-run only adds new rows and keeps what the team
 changed in the app. `--refresh` overwrites imported fields on existing rows.
+
+### Signing in once for scripts
+
+`bun scripts/crm-session.ts login` signs in once (team link via `CRM_JOIN_SECRET`, a password, or
+the emailed link) and keeps the session in the macOS Keychain (service `truffle-crm`). After that
+the import and other CRM scripts sign in silently, every run swaps the stored token for a new one,
+and no new team device is created per run. `status` shows who the session is; `logout` ends it on
+the server and removes it. No secret goes into the repo or `.env`.
+
+`scripts/sql/crm-roles-and-audit.sql` (proposed, applied through Lovable) marks such a session as
+an importer: it can add and update, delete only untouched pipeline leads, and every change by
+anyone is logged in `crm_audit`. The file explains how to mark, revoke and rotate.
+
+### Adding findings without code: patch files
+
+Drop a JSON array in `~/truffle-pilots/work/external/crm-patches/` (or `CRM_PATCH_DIR`), for
+example an outreach wave or a hand check:
+
+```json
+[{ "ref": "lead:osm:node/123", "tags_add": ["wave-1", "seg-new-operator"],
+   "next_step": "Walk in, ask for the owner", "notes_append": "Opened 2025, Tebi, flat white above the area" }]
+```
+
+Use `ref` (an organisation's `external_ref`) or `match` (a lowercase name substring). Allowed keys:
+`tags_add`, `notes_append`, `next_step`, `next_step_due`, `pitch_angle`, `do_not_contact`. Patches
+only add: tags join, a note is appended once, next step and pitch fill empty fields only, and
+`do_not_contact` can only be switched on. Stages and deletes stay with people in the app. The
+next import applies them to new and existing rows; the dry run reports how many matched.
