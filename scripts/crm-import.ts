@@ -27,6 +27,9 @@ const args = new Set(process.argv.slice(2));
 const DRY = args.has("--dry-run");
 const REFRESH = args.has("--refresh");
 const ALL_LEADS = args.has("--all-leads");
+// --new-leads-all: every type and status for leads that are new in the latest pipeline run
+// (leads-new-DATE.csv), the rest as usual. Narrower than --all-leads, which adds the whole backlog.
+const NEW_LEADS_ALL = args.has("--new-leads-all");
 const env = (k: string, d = "") => process.env[k] ?? d;
 
 const DATA = env("CRM_DATA_DIR", join(HOME, "truffle-pilots/work/external"));
@@ -453,13 +456,17 @@ function importLeads() {
     ]),
   );
 
+  const newFile = latestLeadFile("leads-new");
+  const newLeadIds = new Set(
+    NEW_LEADS_ALL && newFile ? readCsv(join(LEADS_DIR, newFile)).map((r) => r["lead_id"]) : [],
+  );
   let n = 0;
   for (const r of readCsv(join(LEADS_DIR, latest))) {
     if (!r["lead_id"]) continue;
     // Open places of any kind; unverified restaurants and cafes too (hidden on the map by default).
     const keep =
       r["status"] === "open" || (r["status"] === "unverified" && LEAD_TYPES.has(r["type"] ?? ""));
-    if (!ALL_LEADS && !keep) continue;
+    if (!ALL_LEADS && !keep && !(NEW_LEADS_ALL && newLeadIds.has(r["lead_id"]))) continue;
     const o = leadOrg(r, source, openers);
     orgs.set(o.external_ref, o);
     n++;
